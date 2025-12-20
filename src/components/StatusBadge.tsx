@@ -12,7 +12,7 @@ const statusConfig: Record<EscrowStatus, { label: string; className: string }> =
   },
   vesting: {
     label: 'Vesting',
-    className: 'bg-primary text-background',
+    className: 'bg-yellow-300 dark:bg-yellow-400 text-yellow-900',
   },
   claimable: {
     label: 'Claimable',

@@ -74,14 +74,14 @@ export default function ClaimButton({
         onClick={handleClaim}
         disabled={isDisabled}
         className={`
-          px-6 py-2 bg-white text-primary font-medium rounded border border-primary transition-colors
+          px-6 py-2 bg-background text-primary font-medium rounded border border-primary transition-colors
           ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-divider-subtle'}
         `}
       >
         {isLoading ? (isPending ? 'Confirm...' : 'Claiming...') : 'Claim'}
       </button>
       {error && (
-        <p className="mt-2 text-sm text-red-600">
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
           {error.message.includes('User rejected')
             ? 'Transaction rejected'
             : 'Failed to claim'}

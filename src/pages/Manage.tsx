@@ -19,6 +19,18 @@ export default function Manage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState<IndexedEscrow[] | null>(null);
+  const [hideCompleted, setHideCompleted] = useState(true);
+
+  const isCompleted = (escrow: IndexedEscrow) => {
+    const now = Math.floor(Date.now() / 1000);
+    return escrow.vestingStart + escrow.vestingDuration < now;
+  };
+
+  const filterEscrows = (escrows: IndexedEscrow[] | undefined) => {
+    if (!escrows) return [];
+    if (!hideCompleted) return escrows;
+    return escrows.filter(e => !isCompleted(e));
+  };
 
   const { escrows: myEscrows, isLoading: loadingEscrows } = useEscrowsByAddress(address);
   const { items: recentlyViewed } = useRecentlyViewed();
@@ -52,9 +64,9 @@ export default function Manage() {
     }
 
     // Check if it's a recipient address
-    const recipientEscrows = escrowsIndex?.escrows.filter(
-      (e) => e.recipient.toLowerCase() === query.toLowerCase()
-    ) || [];
+    const recipientEscrows = escrowsIndex?.escrows
+      .filter((e) => e.recipient.toLowerCase() === query.toLowerCase())
+      .sort((a, b) => b.blockNumber - a.blockNumber) || [];
 
     if (recipientEscrows.length > 0) {
       setSearchResults(recipientEscrows);
@@ -74,7 +86,7 @@ export default function Manage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-primary mb-2">View Escrows</h1>
+        <h1 className="text-xl text-primary text-center">View Escrows</h1>
       </div>
 
       {/* Tabs */}
@@ -119,13 +131,39 @@ export default function Manage() {
             </div>
           ) : myEscrows && myEscrows.length > 0 ? (
             <div className="space-y-4">
-              {myEscrows.map((escrow) => (
+              <div className="flex items-center justify-end">
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                  <span>Hide completed</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={hideCompleted}
+                    onClick={() => setHideCompleted(!hideCompleted)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      hideCompleted ? 'bg-primary' : 'bg-divider-strong'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        hideCompleted ? 'translate-x-4.5' : 'translate-x-1'
+                      }`}
+                      style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
+                    />
+                  </button>
+                </label>
+              </div>
+              {filterEscrows(myEscrows).map((escrow) => (
                 <EscrowCard
                   key={escrow.address}
                   escrow={escrow}
                   tokenMetadata={tokensIndex?.tokens[escrow.token.toLowerCase()]}
                 />
               ))}
+              {filterEscrows(myEscrows).length === 0 && (
+                <div className="text-center py-8 text-secondary">
+                  No active escrows (completed hidden)
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-12 text-secondary">
@@ -163,32 +201,53 @@ export default function Manage() {
 
       {activeTab === 'search' && (
         <div className="space-y-6">
-          <form onSubmit={handleSearch} className="max-w-xl space-y-4">
-            <div>
-              <label htmlFor="search" className="block text-sm font-medium text-primary mb-2">
-                Escrow or Recipient Address
-              </label>
+          <form onSubmit={handleSearch} className="space-y-3">
+            <div className="flex gap-2">
               <input
                 id="search"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="0x..."
-                className="w-full px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary font-mono"
+                placeholder="Enter escrow or recipient address"
+                className="flex-1 px-3 py-2 text-sm border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
               />
-              {searchError && (
-                <p className="mt-2 text-sm text-red-600">{searchError}</p>
-              )}
+              <Button type="submit">Search</Button>
             </div>
-            <Button type="submit">Search</Button>
+            <div className="flex items-center justify-between">
+              <div>
+                {searchError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+                )}
+              </div>
+              <label className="flex items-center gap-2 text-xs text-tertiary cursor-pointer">
+                <span>Hide completed</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={hideCompleted}
+                  onClick={() => setHideCompleted(!hideCompleted)}
+                  className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                    hideCompleted ? 'bg-primary' : 'bg-divider-strong'
+                  }`}
+                >
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full bg-white transition-transform"
+                    style={{ transform: hideCompleted ? 'translateX(14px)' : 'translateX(3px)' }}
+                  />
+                </button>
+              </label>
+            </div>
           </form>
 
           {searchResults && searchResults.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm text-secondary">
-                Found {searchResults.length} escrow{searchResults.length !== 1 ? 's' : ''} for this recipient
+                Found {filterEscrows(searchResults).length} escrow{filterEscrows(searchResults).length !== 1 ? 's' : ''} for this recipient
+                {hideCompleted && searchResults.length !== filterEscrows(searchResults).length && (
+                  <span className="text-tertiary"> ({searchResults.length - filterEscrows(searchResults).length} completed hidden)</span>
+                )}
               </p>
-              {searchResults.map((escrow) => (
+              {filterEscrows(searchResults).map((escrow) => (
                 <EscrowCard
                   key={escrow.address}
                   escrow={escrow}

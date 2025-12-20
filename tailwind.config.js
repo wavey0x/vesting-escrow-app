@@ -4,18 +4,21 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        // STYLEGUIDE.md color system
-        primary: '#111111',
-        secondary: '#6A6A6A',
-        tertiary: '#9A9A9A',
-        'divider-strong': '#CCCCCC',
-        'divider-subtle': '#E6E7EB',
-        background: '#FFFFFF',
+        // STYLEGUIDE.md color system - using CSS variables for theme support
+        primary: 'var(--color-primary)',
+        secondary: 'var(--color-secondary)',
+        tertiary: 'var(--color-tertiary)',
+        'divider-strong': 'var(--color-divider-strong)',
+        'divider-subtle': 'var(--color-divider-subtle)',
+        background: 'var(--color-background)',
+        surface: 'var(--color-surface)',
         // Action colors
-        claimable: '#16a34a',
+        claimable: 'var(--color-claimable)',
+        'claimable-light': 'var(--color-claimable-light)',
       },
       fontFamily: {
         sans: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],

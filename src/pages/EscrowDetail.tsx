@@ -307,8 +307,7 @@ function AmountCard({
     <div className="relative p-4 border rounded-lg border-divider-strong">
       {highlight && (
         <div
-          className="absolute top-2 right-2 w-2 h-2 rounded-full animate-pulse"
-          style={{ backgroundColor: '#16a34a' }}
+          className="absolute top-2 left-2 w-2 h-2 rounded-full animate-pulse bg-claimable"
         />
       )}
       <div className="text-sm text-secondary mb-1">{label}</div>

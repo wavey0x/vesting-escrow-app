@@ -105,7 +105,7 @@ export default function RevokeButton({
         Revoke Unvested
       </Button>
       {error && (
-        <p className="mt-2 text-sm text-red-600">
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
           {error.message.includes('User rejected')
             ? 'Transaction rejected'
             : 'Failed to revoke'}

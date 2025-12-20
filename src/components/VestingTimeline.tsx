@@ -48,7 +48,7 @@ export default function VestingTimeline({
   return (
     <div className="space-y-1">
       {/* Segmented progress bar */}
-      <div className="relative h-4 border border-divider-strong bg-white">
+      <div className="relative h-4 border border-divider-strong bg-background">
         {/* Progress segment - grey fill (claimed or time progress during cliff) */}
         {greyPercent > 0 && (
           <div
@@ -60,11 +60,10 @@ export default function VestingTimeline({
         {/* Claimable segment - light green */}
         {claimablePercent > 0 && (
           <div
-            className="absolute inset-y-0"
+            className="absolute inset-y-0 bg-claimable-light"
             style={{
               left: `${greyPercent}%`,
               width: `${claimablePercent}%`,
-              backgroundColor: '#d1fae5'
             }}
           />
         )}
@@ -72,8 +71,8 @@ export default function VestingTimeline({
         {/* Cliff marker */}
         {hasCliff && cliffPosition > 0 && cliffPosition < 100 && (
           <div
-            className="absolute top-0 bottom-0 w-px"
-            style={{ left: `${cliffPosition}%`, backgroundColor: '#1e3a5f' }}
+            className="absolute top-0 bottom-0 w-px bg-blue-900 dark:bg-blue-400"
+            style={{ left: `${cliffPosition}%` }}
           />
         )}
 
@@ -96,7 +95,7 @@ export default function VestingTimeline({
         <div className="absolute left-0 flex flex-col group cursor-default">
           <span className="uppercase tracking-wide">Start</span>
           <span className="font-mono">{formatDateShort(vestingStart)}</span>
-          <div className="absolute top-full left-0 mt-1 px-2 py-1 bg-primary text-white text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+          <div className="absolute top-full left-0 mt-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
             {formatDateFull(vestingStart)}
           </div>
         </div>
@@ -107,9 +106,9 @@ export default function VestingTimeline({
             className="absolute flex flex-col items-center group cursor-default"
             style={{ left: `${cliffPosition}%`, transform: 'translateX(-50%)' }}
           >
-            <span className="uppercase tracking-wide" style={{ color: '#1e3a5f' }}>Cliff</span>
+            <span className="uppercase tracking-wide text-blue-900 dark:text-blue-400">Cliff</span>
             <span className="font-mono">{formatDateShort(cliffEnd)}</span>
-            <div className="absolute top-full mt-1 px-2 py-1 bg-primary text-white text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+            <div className="absolute top-full mt-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
               {formatDateFull(cliffEnd)}
             </div>
           </div>
@@ -119,7 +118,7 @@ export default function VestingTimeline({
         <div className="absolute right-0 flex flex-col items-end group cursor-default">
           <span className="uppercase tracking-wide">End</span>
           <span className="font-mono">{formatDateShort(vestingEnd)}</span>
-          <div className="absolute top-full right-0 mt-1 px-2 py-1 bg-primary text-white text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+          <div className="absolute top-full right-0 mt-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
             {formatDateFull(vestingEnd)}
           </div>
         </div>

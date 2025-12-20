@@ -4,14 +4,41 @@
 
 /* STYLEGUIDE.md - Base Styles */
 @layer base {
+  :root {
+    --color-primary: #111111;
+    --color-secondary: #6A6A6A;
+    --color-tertiary: #9A9A9A;
+    --color-divider-strong: #CCCCCC;
+    --color-divider-subtle: #E6E7EB;
+    --color-background: #FFFFFF;
+    --color-surface: #F9FAFB;
+    --color-claimable: #16a34a;
+    --color-claimable-light: #d1fae5;
+  }
+
+  html.dark {
+    --color-primary: #F0F0F0;
+    --color-secondary: #C8C8C8;
+    --color-tertiary: #909090;
+    --color-divider-strong: #404040;
+    --color-divider-subtle: #2A2A2A;
+    --color-background: #121212;
+    --color-surface: #1E1E1E;
+    --color-claimable: #22c55e;
+    --color-claimable-light: #14532d;
+  }
+
   html {
-    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'SF Mono', 'Roboto Mono', 'Fira Code', ui-monospace, monospace;
+    font-size: 14px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
   body {
-    @apply bg-background text-primary text-body;
+    background-color: var(--color-background);
+    color: var(--color-primary);
+    @apply text-body transition-colors duration-200;
   }
 }
 
@@ -20,9 +47,9 @@
   /* Spinner - Primary */
   .spinner {
     @apply inline-block rounded-full border-[1.5px] border-transparent;
-    border-top-color: #111111;
-    border-right-color: #111111;
-    border-bottom-color: #111111;
+    border-top-color: var(--color-primary);
+    border-right-color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
     animation: spin 1s linear infinite;
   }
 
@@ -41,9 +68,9 @@
   /* Inline spinner (muted color) */
   .spinner-inline {
     @apply inline-block w-3 h-3 rounded-full border border-transparent align-middle;
-    border-top-color: #6A6A6A;
-    border-right-color: #6A6A6A;
-    border-bottom-color: #6A6A6A;
+    border-top-color: var(--color-secondary);
+    border-right-color: var(--color-secondary);
+    border-bottom-color: var(--color-secondary);
     animation: spin 0.8s linear infinite;
   }
 
@@ -74,8 +101,8 @@
     @apply h-full;
     background: repeating-linear-gradient(
       45deg,
-      #111111,
-      #111111 2px,
+      var(--color-primary),
+      var(--color-primary) 2px,
       transparent 2px,
       transparent 4px
     );
@@ -85,8 +112,8 @@
   .bg-hatched {
     background: repeating-linear-gradient(
       45deg,
-      #111111,
-      #111111 1px,
+      var(--color-primary),
+      var(--color-primary) 1px,
       transparent 1px,
       transparent 3px
     );
@@ -96,8 +123,8 @@
   .bg-hatched-green {
     background: repeating-linear-gradient(
       45deg,
-      #16a34a,
-      #16a34a 1px,
+      var(--color-claimable),
+      var(--color-claimable) 1px,
       transparent 1px,
       transparent 3px
     );
@@ -118,16 +145,16 @@
   }
 
   .btn-primary {
-    @apply bg-primary text-white hover:bg-opacity-90;
+    @apply bg-primary text-background hover:bg-opacity-90;
   }
 
   .btn-secondary {
-    @apply border border-divider-strong text-primary hover:bg-gray-50;
+    @apply border border-divider-strong text-primary hover:bg-divider-subtle;
   }
 
   /* Input fields */
   .input {
-    @apply w-full px-3 py-2 text-body font-mono border border-divider-strong bg-white;
+    @apply w-full px-3 py-2 text-body font-mono border border-divider-strong bg-background;
     @apply focus:outline-none focus:border-primary;
   }
 

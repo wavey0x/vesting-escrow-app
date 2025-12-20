@@ -273,7 +273,7 @@ export default function Create() {
             value={tokenAddress}
             onChange={(e) => setTokenAddress(e.target.value)}
             placeholder="0x..."
-            className="w-full px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary font-mono"
+            className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary font-mono"
           />
           {validTokenAddress && tokenSymbol && (
             <p className="mt-2 text-sm text-secondary">
@@ -295,7 +295,7 @@ export default function Create() {
             value={recipient}
             onChange={(e) => setRecipient(e.target.value)}
             placeholder="0x..."
-            className="w-full px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary font-mono"
+            className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary font-mono"
           />
         </div>
 
@@ -309,10 +309,10 @@ export default function Create() {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.0"
-            className="w-full px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary"
+            className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
           />
           {!hasBalance && amountParsed > 0n && (
-            <p className="mt-2 text-sm text-red-600">Insufficient balance</p>
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">Insufficient balance</p>
           )}
         </div>
 
@@ -349,12 +349,12 @@ export default function Create() {
               min="1"
               value={durationValue}
               onChange={(e) => setDurationValue(e.target.value)}
-              className="flex-1 px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary"
+              className="flex-1 px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
             />
             <select
               value={durationUnit}
               onChange={(e) => setDurationUnit(Number(e.target.value))}
-              className="px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary"
+              className="px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
             >
               {DURATION_UNITS.map((unit) => (
                 <option key={unit.value} value={unit.value}>
@@ -376,12 +376,12 @@ export default function Create() {
               min="0"
               value={cliffValue}
               onChange={(e) => setCliffValue(e.target.value)}
-              className="flex-1 px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary"
+              className="flex-1 px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
             />
             <select
               value={cliffUnit}
               onChange={(e) => setCliffUnit(Number(e.target.value))}
-              className="px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary"
+              className="px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
             >
               {DURATION_UNITS.map((unit) => (
                 <option key={unit.value} value={unit.value}>
@@ -391,7 +391,7 @@ export default function Create() {
             </select>
           </div>
           {cliff > duration && (
-            <p className="mt-2 text-sm text-red-600">
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
               Cliff cannot be longer than duration
             </p>
           )}
@@ -426,7 +426,7 @@ export default function Create() {
                 type="datetime-local"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-4 py-2 border border-divider-strong rounded focus:outline-none focus:border-primary"
+                className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
               />
             )}
           </div>
@@ -493,7 +493,7 @@ export default function Create() {
           )}
 
           {(approveError || deployError) && (
-            <p className="mt-4 text-sm text-red-600 text-center">
+            <p className="mt-4 text-sm text-red-600 dark:text-red-400 text-center">
               {(approveError || deployError)?.message.includes('User rejected')
                 ? 'Transaction rejected'
                 : 'Transaction failed'}
