@@ -20,7 +20,7 @@ export default function Layout({ children }: LayoutProps) {
       <header className="sticky top-0 z-50 bg-background border-b border-divider-subtle">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4 sm:gap-8">
-            <Link to="/" className="text-lg sm:text-xl font-semibold text-primary">
+            <Link to="/" className="hidden sm:block text-xl font-semibold text-primary">
               Vesting Escrow
             </Link>
             <nav className="flex items-center gap-4 sm:gap-6">
