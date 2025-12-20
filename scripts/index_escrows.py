@@ -112,8 +112,8 @@ def event_to_escrow(event) -> dict:
 def fetch_events(contract, from_block: int, to_block: int) -> list:
     """Fetch VestingEscrowCreated events using contract interface."""
     events = contract.events.VestingEscrowCreated.get_logs(
-        fromBlock=from_block,
-        toBlock=to_block
+        from_block=from_block,
+        to_block=to_block
     )
     return [event_to_escrow(e) for e in events]
 

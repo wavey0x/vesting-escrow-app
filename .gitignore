@@ -3,6 +3,11 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Python virtual environment
+venv/
+.venv/
+env/
+
 # Build output
 dist/
 
