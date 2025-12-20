@@ -61,8 +61,13 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
   return (
     <Link
       to={`/view/${escrow.address}`}
-      className="block p-4 border border-divider-strong rounded-lg hover:border-primary transition-all duration-200"
+      className="relative block p-4 border border-divider-strong rounded-lg hover:border-primary transition-all duration-200"
     >
+      {/* Star - snug in top-right corner */}
+      <div className="absolute top-0.5 right-0.5">
+        <StarButton address={escrow.address} size={16} />
+      </div>
+
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
           <TokenLogo
@@ -110,9 +115,9 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Address below star, right-aligned with content edge */}
+        <div className="flex flex-col items-end pt-3">
           <Address address={escrow.address} showCopy className="text-sm text-secondary" />
-          <StarButton address={escrow.address} size={16} />
         </div>
       </div>
 
