@@ -1,5 +1,5 @@
-import { useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { isAddress } from 'viem';
 import Button from '../components/Button';
@@ -16,11 +16,34 @@ type Tab = 'my-escrows' | 'starred' | 'search';
 export default function Manage() {
   const { address, isConnected } = useAccount();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('my-escrows');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    // Start on search tab if there's a query in URL
+    return searchParams.get('q') ? 'search' : 'my-escrows';
+  });
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [searchError, setSearchError] = useState('');
   const [searchResults, setSearchResults] = useState<IndexedEscrow[] | null>(null);
-  const [hideCompleted, setHideCompleted] = useState(true);
+  const [hideCompleted, setHideCompleted] = useState(() => {
+    const param = searchParams.get('hideCompleted');
+    return param === null ? true : param !== 'false';
+  });
+  const [pendingSearch, setPendingSearch] = useState(() => !!searchParams.get('q'));
+
+  // Update URL when hideCompleted changes
+  const toggleHideCompleted = useCallback(() => {
+    setHideCompleted(prev => {
+      const newValue = !prev;
+      const newParams = new URLSearchParams(searchParams);
+      if (newValue) {
+        newParams.delete('hideCompleted'); // default is true, so omit from URL
+      } else {
+        newParams.set('hideCompleted', 'false');
+      }
+      setSearchParams(newParams);
+      return newValue;
+    });
+  }, [searchParams, setSearchParams]);
 
   // Determine if escrow is completed based on time
   const isCompleted = useCallback((escrow: IndexedEscrow) => {
@@ -91,35 +114,40 @@ export default function Manage() {
   // Batch fetch live data for all visible escrows
   const { data: liveDataMap, isLoading: loadingLiveData } = useBatchLiveEscrowData(escrowAddressesToFetch);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  const performSearch = useCallback((query: string, updateUrl = true) => {
     setSearchError('');
     setSearchResults(null);
 
-    const query = searchQuery.trim();
-    if (!query) {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) {
       setSearchError('Please enter an address');
+      if (updateUrl) setSearchParams({});
       return;
     }
 
-    if (!isAddress(query)) {
+    if (!isAddress(trimmedQuery)) {
       setSearchError('Invalid Ethereum address');
       return;
     }
 
+    // Update URL with search query
+    if (updateUrl) {
+      setSearchParams({ q: trimmedQuery });
+    }
+
     // Check if it's an escrow address
     const escrow = escrowsIndex?.escrows.find(
-      (e) => e.address.toLowerCase() === query.toLowerCase()
+      (e) => e.address.toLowerCase() === trimmedQuery.toLowerCase()
     );
 
     if (escrow) {
-      navigate(`/view/${query}`);
+      navigate(`/view/${trimmedQuery}`);
       return;
     }
 
     // Check if it's a recipient address
     const recipientEscrows = escrowsIndex?.escrows
-      .filter((e) => e.recipient.toLowerCase() === query.toLowerCase())
+      .filter((e) => e.recipient.toLowerCase() === trimmedQuery.toLowerCase())
       .sort((a, b) => b.blockNumber - a.blockNumber) || [];
 
     if (recipientEscrows.length > 0) {
@@ -129,6 +157,19 @@ export default function Manage() {
 
     // No results found
     setSearchError('No escrows found for this address');
+  }, [escrowsIndex, navigate, setSearchParams]);
+
+  // Auto-search from URL when escrowsIndex loads
+  useEffect(() => {
+    if (pendingSearch && escrowsIndex && !loadingIndex) {
+      performSearch(searchQuery, false);
+      setPendingSearch(false);
+    }
+  }, [pendingSearch, escrowsIndex, loadingIndex, searchQuery, performSearch]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    performSearch(searchQuery);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -218,7 +259,7 @@ export default function Manage() {
                     type="button"
                     role="switch"
                     aria-checked={hideCompleted}
-                    onClick={() => setHideCompleted(!hideCompleted)}
+                    onClick={toggleHideCompleted}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       hideCompleted ? 'bg-secondary' : 'bg-divider-strong'
                     }`}
@@ -266,7 +307,7 @@ export default function Manage() {
                     type="button"
                     role="switch"
                     aria-checked={hideCompleted}
-                    onClick={() => setHideCompleted(!hideCompleted)}
+                    onClick={toggleHideCompleted}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                       hideCompleted ? 'bg-secondary' : 'bg-divider-strong'
                     }`}
@@ -322,7 +363,7 @@ export default function Manage() {
                   type="button"
                   role="switch"
                   aria-checked={hideCompleted}
-                  onClick={() => setHideCompleted(!hideCompleted)}
+                  onClick={toggleHideCompleted}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                     hideCompleted ? 'bg-secondary' : 'bg-divider-strong'
                   }`}

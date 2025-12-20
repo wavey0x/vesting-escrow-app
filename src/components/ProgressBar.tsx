@@ -13,6 +13,7 @@ export default function ProgressBar({
 }: ProgressBarProps) {
   const clampedProgress = Math.max(0, Math.min(100, progress));
   const hasCliff = cliffPercent !== undefined && cliffPercent > 0 && cliffPercent < 100;
+  const isComplete = clampedProgress >= 100;
 
   return (
     <div className={`relative ${className}`}>
@@ -21,13 +22,15 @@ export default function ProgressBar({
           className="h-full rounded-full transition-all duration-300"
           style={{
             width: `${clampedProgress}%`,
-            background: `repeating-linear-gradient(
-              -45deg,
-              #888,
-              #888 2px,
-              #bbb 2px,
-              #bbb 4px
-            )`,
+            background: isComplete
+              ? '#888'
+              : `repeating-linear-gradient(
+                  -45deg,
+                  #888,
+                  #888 2px,
+                  #bbb 2px,
+                  #bbb 4px
+                )`,
           }}
         />
         {hasCliff && (
