@@ -65,8 +65,8 @@ export default function EscrowDetail() {
     );
   }
 
-  // Loading state
-  if (loadingIndex || loadingLive) {
+  // Only block on index loading - show layout immediately, lazy load live data
+  if (loadingIndex) {
     return (
       <div className="flex items-center justify-center py-12">
         <Spinner size="lg" />
@@ -181,7 +181,7 @@ export default function EscrowDetail() {
                 )}
               </div>
             )}
-            {escrow.status && <StatusBadge status={escrow.status} />}
+            <StatusBadge status={escrow.status} isLoading={loadingLive} />
           </div>
         </div>
         <div className="flex items-center">
@@ -231,6 +231,7 @@ export default function EscrowDetail() {
           amount={amounts.claimable}
           decimals={decimals}
           value={formatValue(amounts.claimable)}
+          isLoading={loadingLive}
           action={showClaim ? (
             <ClaimButton
               escrowAddress={escrow.address}
@@ -246,6 +247,7 @@ export default function EscrowDetail() {
           amount={amounts.claimed}
           decimals={decimals}
           value={formatValue(amounts.claimed)}
+          isLoading={loadingLive}
         />
         <AmountCard
           label="Total"
@@ -337,12 +339,14 @@ function AmountCard({
   decimals,
   value,
   action,
+  isLoading,
 }: {
   label: string;
   amount: bigint;
   decimals: number;
   value: string | null;
   action?: React.ReactNode;
+  isLoading?: boolean;
 }) {
   return (
     <div className="relative p-4 border rounded-lg border-divider-strong">
@@ -352,8 +356,16 @@ function AmountCard({
         </div>
       )}
       <div className="text-sm text-secondary mb-1">{label}</div>
-      <TokenAmount value={amount} decimals={decimals} className="text-lg font-medium text-primary block" />
-      {value && <div className="text-sm text-tertiary">{value}</div>}
+      {isLoading ? (
+        <div className="h-7 w-24 bg-divider-subtle rounded animate-pulse" />
+      ) : (
+        <TokenAmount value={amount} decimals={decimals} className="text-lg font-medium text-primary block" />
+      )}
+      {isLoading ? (
+        <div className="h-4 w-16 bg-divider-subtle rounded animate-pulse mt-1" />
+      ) : value ? (
+        <div className="text-sm text-tertiary">{value}</div>
+      ) : null}
     </div>
   );
 }
