@@ -1,0 +1,35 @@
+name: Index Escrows
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Daily at midnight UTC
+  workflow_dispatch:      # Manual trigger
+
+jobs:
+  index:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run indexer
+        run: python scripts/index_escrows.py
+        env:
+          MAINNET_RPC: ${{ secrets.MAINNET_RPC }}
+
+      - name: Commit updated index
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update escrow index [skip ci]"
+          file_pattern: "public/data/escrows.json public/data/tokens.json"
+          commit_author: "GitHub Actions <actions@github.com>"

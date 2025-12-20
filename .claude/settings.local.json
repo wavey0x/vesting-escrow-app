@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:assets.smold.app)",
+      "WebFetch(domain:defillama.com)",
+      "WebSearch"
+    ]
+  }
+}
