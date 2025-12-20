@@ -20,6 +20,7 @@ interface ClaimButtonProps {
   unclaimed: bigint;
   recipient: string;
   onSuccess?: () => void;
+  compact?: boolean;
 }
 
 export default function ClaimButton({
@@ -27,6 +28,7 @@ export default function ClaimButton({
   unclaimed,
   recipient,
   onSuccess,
+  compact = false,
 }: ClaimButtonProps) {
   const { data: hash, isPending, writeContract, error } = useWriteContract();
 
@@ -49,7 +51,25 @@ export default function ClaimButton({
     onSuccess();
   }
 
+  const isLoading = isPending || isConfirming;
+  const isDisabled = unclaimed === 0n || isLoading;
+
   if (isSuccess && hash) {
+    if (compact) {
+      return (
+        <a
+          href={getEtherscanTxUrl(hash)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="p-1.5 text-primary hover:text-secondary transition-colors"
+          title="View transaction"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </a>
+      );
+    }
     return (
       <div className="flex items-center gap-2">
         <span className="text-sm text-primary">Claimed successfully!</span>
@@ -65,8 +85,24 @@ export default function ClaimButton({
     );
   }
 
-  const isLoading = isPending || isConfirming;
-  const isDisabled = unclaimed === 0n || isLoading;
+  if (compact) {
+    return (
+      <button
+        onClick={handleClaim}
+        disabled={isDisabled}
+        className={`relative px-2 py-1 text-xs font-medium rounded transition-colors ${
+          isDisabled
+            ? 'text-tertiary cursor-not-allowed'
+            : 'text-primary border border-primary hover:bg-divider-subtle'
+        } ${isLoading ? 'animate-pulse' : ''}`}
+      >
+        {unclaimed > 0n && !isLoading && (
+          <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full animate-pulse bg-claimable" />
+        )}
+        {isLoading ? (isPending ? '...' : '...') : 'Claim'}
+      </button>
+    );
+  }
 
   return (
     <div>

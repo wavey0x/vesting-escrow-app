@@ -19,14 +19,13 @@ export default function ConnectButton() {
 
   if (isConnected && address) {
     return (
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-mono text-secondary">
-          {formatAddress(address)}
-        </span>
-        <Button variant="ghost" size="sm" onClick={() => disconnect()}>
-          Disconnect
-        </Button>
-      </div>
+      <button
+        onClick={() => disconnect()}
+        className="text-sm font-mono text-secondary hover:text-primary transition-colors"
+        title="Click to disconnect"
+      >
+        {formatAddress(address)}
+      </button>
     );
   }
 

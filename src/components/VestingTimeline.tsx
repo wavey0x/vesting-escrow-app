@@ -57,13 +57,20 @@ export default function VestingTimeline({
           />
         )}
 
-        {/* Claimable segment - light green */}
+        {/* Claimable segment - hatched pattern */}
         {claimablePercent > 0 && (
           <div
-            className="absolute inset-y-0 bg-claimable-light"
+            className="absolute inset-y-0"
             style={{
               left: `${greyPercent}%`,
               width: `${claimablePercent}%`,
+              background: `repeating-linear-gradient(
+                -45deg,
+                #888,
+                #888 2px,
+                #bbb 2px,
+                #bbb 4px
+              )`,
             }}
           />
         )}
@@ -81,8 +88,8 @@ export default function VestingTimeline({
           const coloredEnd = greyPercent + claimablePercent;
           return coloredEnd > 0 && coloredEnd < 100 && (
             <div
-              className="absolute top-0 bottom-0 w-px border-l border-divider-strong"
-              style={{ left: `${coloredEnd}%` }}
+              className="absolute top-0 bottom-0 w-0.5 bg-primary"
+              style={{ left: `${coloredEnd}%`, transform: 'translateX(-50%)' }}
             />
           );
         })()}

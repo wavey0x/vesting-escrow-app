@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { isAddress } from 'viem';
@@ -6,11 +6,12 @@ import Button from '../components/Button';
 import Spinner from '../components/Spinner';
 import EscrowCard from '../components/EscrowCard';
 import { useEscrows, useEscrowsByAddress } from '../hooks/useEscrows';
-import { useRecentlyViewed } from '../hooks/useRecentlyViewed';
+import { useStarredEscrows } from '../contexts/StarredEscrowsContext';
+import { useBatchLiveEscrowData } from '../hooks/useBatchLiveEscrowData';
 import { useTokens } from '../hooks/useTokens';
 import { IndexedEscrow } from '../lib/types';
 
-type Tab = 'my-escrows' | 'recently-viewed' | 'search';
+type Tab = 'my-escrows' | 'starred' | 'search';
 
 export default function Manage() {
   const { address, isConnected } = useAccount();
@@ -21,21 +22,74 @@ export default function Manage() {
   const [searchResults, setSearchResults] = useState<IndexedEscrow[] | null>(null);
   const [hideCompleted, setHideCompleted] = useState(true);
 
-  const isCompleted = (escrow: IndexedEscrow) => {
+  // Determine if escrow is completed based on time
+  const isCompleted = useCallback((escrow: IndexedEscrow) => {
     const now = Math.floor(Date.now() / 1000);
     return escrow.vestingStart + escrow.vestingDuration < now;
-  };
+  }, []);
 
-  const filterEscrows = (escrows: IndexedEscrow[] | undefined) => {
+  // Determine if escrow is active (cliff or vesting, not completed)
+  const isActive = useCallback((escrow: IndexedEscrow) => {
+    return !isCompleted(escrow);
+  }, [isCompleted]);
+
+  // Sort and filter escrows consistently:
+  // 1. Active escrows (cliff/vesting) first, then completed
+  // 2. Within each group, sort by start time descending (newest first)
+  const sortAndFilterEscrows = useCallback((escrows: IndexedEscrow[] | undefined) => {
     if (!escrows) return [];
-    if (!hideCompleted) return escrows;
-    return escrows.filter(e => !isCompleted(e));
-  };
+
+    // Filter if hideCompleted is enabled
+    const filtered = hideCompleted
+      ? escrows.filter(e => isActive(e))
+      : escrows;
+
+    // Sort: active first, then by start time descending
+    return [...filtered].sort((a, b) => {
+      const aActive = isActive(a);
+      const bActive = isActive(b);
+
+      // Active escrows come first
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+
+      // Within same group, sort by start time descending (newest first)
+      return b.vestingStart - a.vestingStart;
+    });
+  }, [hideCompleted, isActive]);
 
   const { escrows: myEscrows, isLoading: loadingEscrows } = useEscrowsByAddress(address);
-  const { items: recentlyViewed } = useRecentlyViewed();
+  const { starred } = useStarredEscrows();
   const { data: escrowsIndex, isLoading: loadingIndex } = useEscrows();
   const { data: tokensIndex } = useTokens();
+
+  // Get starred escrows from index
+  const starredEscrows = useMemo(() => {
+    if (!escrowsIndex?.escrows) return [];
+    return starred
+      .map(addr => escrowsIndex.escrows.find(
+        e => e.address.toLowerCase() === addr.toLowerCase()
+      ))
+      .filter((e): e is IndexedEscrow => e !== undefined);
+  }, [starred, escrowsIndex]);
+
+  // Collect all escrow addresses that need live data based on active tab
+  const escrowAddressesToFetch = useMemo(() => {
+    const addresses: string[] = [];
+
+    if (activeTab === 'my-escrows' && myEscrows) {
+      addresses.push(...sortAndFilterEscrows(myEscrows).map(e => e.address));
+    } else if (activeTab === 'starred') {
+      addresses.push(...sortAndFilterEscrows(starredEscrows).map(e => e.address));
+    } else if (activeTab === 'search' && searchResults) {
+      addresses.push(...sortAndFilterEscrows(searchResults).map(e => e.address));
+    }
+
+    return addresses;
+  }, [activeTab, myEscrows, starredEscrows, searchResults, sortAndFilterEscrows]);
+
+  // Batch fetch live data for all visible escrows
+  const { data: liveDataMap, isLoading: loadingLiveData } = useBatchLiveEscrowData(escrowAddressesToFetch);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,14 +131,39 @@ export default function Manage() {
     setSearchError('No escrows found for this address');
   };
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'my-escrows', label: 'My Escrows' },
-    { id: 'recently-viewed', label: 'Recently Viewed' },
-    { id: 'search', label: 'Search' },
+  const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    {
+      id: 'my-escrows',
+      label: 'My Escrows',
+      icon: (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'starred',
+      label: 'Starred',
+      icon: (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ),
+    },
+    {
+      id: 'search',
+      label: 'Search',
+      icon: (
+        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
+      ),
+    },
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-3xl mx-auto">
       <div>
         <h1 className="text-xl text-primary text-center">View Escrows</h1>
       </div>
@@ -96,21 +175,22 @@ export default function Manage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              className={`flex items-center pb-3 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
                   ? 'border-primary text-primary'
                   : 'border-transparent text-secondary hover:text-primary'
               }`}
             >
-              {tab.label}
+              {tab.icon}
+              <span className="ml-1.5">{tab.label}</span>
               {tab.id === 'my-escrows' && myEscrows && myEscrows.length > 0 && (
-                <span className="ml-2 px-1.5 py-0.5 text-xs bg-divider-subtle rounded">
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-divider-subtle rounded">
                   {myEscrows.length}
                 </span>
               )}
-              {tab.id === 'recently-viewed' && recentlyViewed.length > 0 && (
-                <span className="ml-2 px-1.5 py-0.5 text-xs bg-divider-subtle rounded">
-                  {recentlyViewed.length}
+              {tab.id === 'starred' && starredEscrows.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-divider-subtle rounded">
+                  {starredEscrows.length}
                 </span>
               )}
             </button>
@@ -120,7 +200,7 @@ export default function Manage() {
 
       {/* Tab Content */}
       {activeTab === 'my-escrows' && (
-        <div>
+        <div className="min-h-[200px]">
           {!isConnected ? (
             <div className="text-center py-12 text-secondary">
               Connect your wallet to see your escrows
@@ -131,7 +211,7 @@ export default function Manage() {
             </div>
           ) : myEscrows && myEscrows.length > 0 ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-end">
+              <div className="flex items-center justify-start">
                 <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                   <span>Hide completed</span>
                   <button
@@ -140,11 +220,11 @@ export default function Manage() {
                     aria-checked={hideCompleted}
                     onClick={() => setHideCompleted(!hideCompleted)}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      hideCompleted ? 'bg-primary' : 'bg-divider-strong'
+                      hideCompleted ? 'bg-secondary' : 'bg-divider-strong'
                     }`}
                   >
                     <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white border border-divider-strong shadow-sm transition-transform ${
                         hideCompleted ? 'translate-x-4.5' : 'translate-x-1'
                       }`}
                       style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
@@ -152,14 +232,16 @@ export default function Manage() {
                   </button>
                 </label>
               </div>
-              {filterEscrows(myEscrows).map((escrow) => (
+              {sortAndFilterEscrows(myEscrows).map((escrow) => (
                 <EscrowCard
                   key={escrow.address}
                   escrow={escrow}
                   tokenMetadata={tokensIndex?.tokens[escrow.token.toLowerCase()]}
+                  liveData={liveDataMap[escrow.address.toLowerCase()]}
+                  isLoadingLiveData={loadingLiveData}
                 />
               ))}
-              {filterEscrows(myEscrows).length === 0 && (
+              {sortAndFilterEscrows(myEscrows).length === 0 && (
                 <div className="text-center py-8 text-secondary">
                   No active escrows (completed hidden)
                 </div>
@@ -173,34 +255,54 @@ export default function Manage() {
         </div>
       )}
 
-      {activeTab === 'recently-viewed' && (
-        <div>
-          {recentlyViewed.length > 0 ? (
+      {activeTab === 'starred' && (
+        <div className="min-h-[200px]">
+          {starredEscrows.length > 0 ? (
             <div className="space-y-4">
-              {recentlyViewed.map((item) => {
-                const escrow = escrowsIndex?.escrows.find(
-                  (e) => e.address.toLowerCase() === item.address.toLowerCase()
-                );
-                if (!escrow) return null;
-                return (
-                  <EscrowCard
-                    key={escrow.address}
-                    escrow={escrow}
-                    tokenMetadata={tokensIndex?.tokens[escrow.token.toLowerCase()]}
-                  />
-                );
-              })}
+              <div className="flex items-center justify-start">
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                  <span>Hide completed</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={hideCompleted}
+                    onClick={() => setHideCompleted(!hideCompleted)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      hideCompleted ? 'bg-secondary' : 'bg-divider-strong'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white border border-divider-strong shadow-sm transition-transform`}
+                      style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
+                    />
+                  </button>
+                </label>
+              </div>
+              {sortAndFilterEscrows(starredEscrows).map((escrow) => (
+                <EscrowCard
+                  key={escrow.address}
+                  escrow={escrow}
+                  tokenMetadata={tokensIndex?.tokens[escrow.token.toLowerCase()]}
+                  liveData={liveDataMap[escrow.address.toLowerCase()]}
+                  isLoadingLiveData={loadingLiveData}
+                />
+              ))}
+              {sortAndFilterEscrows(starredEscrows).length === 0 && (
+                <div className="text-center py-8 text-secondary">
+                  No active escrows (completed hidden)
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-12 text-secondary">
-              No recently viewed escrows
+              No starred escrows. Click the star on any escrow to save it here.
             </div>
           )}
         </div>
       )}
 
       {activeTab === 'search' && (
-        <div className="space-y-6">
+        <div className="space-y-6 min-h-[200px]">
           <form onSubmit={handleSearch} className="space-y-3">
             <div className="flex gap-2">
               <input
@@ -214,44 +316,46 @@ export default function Manage() {
               <Button type="submit">Search</Button>
             </div>
             <div className="flex items-center justify-between">
-              <div>
-                {searchError && (
-                  <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
-                )}
-              </div>
-              <label className="flex items-center gap-2 text-xs text-tertiary cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
                 <span>Hide completed</span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={hideCompleted}
                   onClick={() => setHideCompleted(!hideCompleted)}
-                  className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
-                    hideCompleted ? 'bg-primary' : 'bg-divider-strong'
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    hideCompleted ? 'bg-secondary' : 'bg-divider-strong'
                   }`}
                 >
                   <span
-                    className="inline-block h-2.5 w-2.5 rounded-full bg-white transition-transform"
-                    style={{ transform: hideCompleted ? 'translateX(14px)' : 'translateX(3px)' }}
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform`}
+                    style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
                   />
                 </button>
               </label>
+              <div>
+                {searchError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+                )}
+              </div>
             </div>
           </form>
 
           {searchResults && searchResults.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm text-secondary">
-                Found {filterEscrows(searchResults).length} escrow{filterEscrows(searchResults).length !== 1 ? 's' : ''} for this recipient
-                {hideCompleted && searchResults.length !== filterEscrows(searchResults).length && (
-                  <span className="text-tertiary"> ({searchResults.length - filterEscrows(searchResults).length} completed hidden)</span>
+                Found {sortAndFilterEscrows(searchResults).length} escrow{sortAndFilterEscrows(searchResults).length !== 1 ? 's' : ''} for this recipient
+                {hideCompleted && searchResults.length !== sortAndFilterEscrows(searchResults).length && (
+                  <span className="text-tertiary"> ({searchResults.length - sortAndFilterEscrows(searchResults).length} completed hidden)</span>
                 )}
               </p>
-              {filterEscrows(searchResults).map((escrow) => (
+              {sortAndFilterEscrows(searchResults).map((escrow) => (
                 <EscrowCard
                   key={escrow.address}
                   escrow={escrow}
                   tokenMetadata={tokensIndex?.tokens[escrow.token.toLowerCase()]}
+                  liveData={liveDataMap[escrow.address.toLowerCase()]}
+                  isLoadingLiveData={loadingLiveData}
                 />
               ))}
             </div>

@@ -17,12 +17,12 @@
   }
 
   html.dark {
-    --color-primary: #F0F0F0;
-    --color-secondary: #C8C8C8;
-    --color-tertiary: #909090;
+    --color-primary: #FAFAFA;
+    --color-secondary: #D8D8D8;
+    --color-tertiary: #A0A0A0;
     --color-divider-strong: #404040;
     --color-divider-subtle: #2A2A2A;
-    --color-background: #121212;
+    --color-background: #1a1a1a;
     --color-surface: #1E1E1E;
     --color-claimable: #22c55e;
     --color-claimable-light: #14532d;
@@ -33,6 +33,7 @@
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-y: scroll; /* Always show scrollbar to prevent layout shift */
   }
 
   body {

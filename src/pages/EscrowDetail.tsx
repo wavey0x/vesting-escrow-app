@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { isAddress } from 'viem';
@@ -13,11 +13,12 @@ import TokenAmount from '../components/TokenAmount';
 import ClaimButton from '../components/ClaimButton';
 import RevokeButton from '../components/RevokeButton';
 import DisownButton from '../components/DisownButton';
+import StarButton from '../components/StarButton';
 import { useEscrowByAddress } from '../hooks/useEscrows';
 import { useTokens } from '../hooks/useTokens';
 import { useTokenPrice } from '../hooks/usePrices';
 import { useLiveEscrowData } from '../hooks/useLiveEscrowData';
-import { useRecentlyViewed } from '../hooks/useRecentlyViewed';
+import { useEscrowNames } from '../contexts/EscrowNamesContext';
 import {
   formatUSD,
   formatDateTime,
@@ -38,25 +39,16 @@ import {
 export default function EscrowDetail() {
   const { address: escrowAddress } = useParams<{ address: string }>();
   const { address: userAddress } = useAccount();
-  const { addRecentlyViewed } = useRecentlyViewed();
 
   const { escrow: indexedEscrow, isLoading: loadingIndex } = useEscrowByAddress(escrowAddress);
   const { data: liveData, isLoading: loadingLive, refetch } = useLiveEscrowData(escrowAddress);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
+  const { getName, setName } = useEscrowNames();
   const { data: tokensIndex } = useTokens();
   const tokenMetadata = tokensIndex?.tokens[indexedEscrow?.token.toLowerCase() || ''];
   const tokenPrice = useTokenPrice(indexedEscrow?.token);
-
-  // Add to recently viewed on mount
-  useEffect(() => {
-    if (indexedEscrow) {
-      addRecentlyViewed({
-        address: indexedEscrow.address,
-        token: indexedEscrow.token,
-        recipient: indexedEscrow.recipient,
-      });
-    }
-  }, [indexedEscrow, addRecentlyViewed]);
 
   // Validate address
   if (!escrowAddress || !isAddress(escrowAddress)) {
@@ -117,7 +109,7 @@ export default function EscrowDetail() {
   const userIsRecipient = isRecipient(escrow, userAddress);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 max-w-3xl mx-auto">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -134,24 +126,79 @@ export default function EscrowDetail() {
               symbol={tokenMetadata?.symbol}
               size={32}
             />
-            <h1 className="text-2xl font-bold text-primary">
-              {tokenMetadata?.symbol || 'Unknown Token'} Escrow
-            </h1>
+            {isEditingName ? (
+              <input
+                type="text"
+                value={editNameValue}
+                onChange={(e) => setEditNameValue(e.target.value)}
+                onBlur={() => {
+                  setName(escrow.address, editNameValue);
+                  setIsEditingName(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setName(escrow.address, editNameValue);
+                    setIsEditingName(false);
+                  } else if (e.key === 'Escape') {
+                    setIsEditingName(false);
+                  }
+                }}
+                autoFocus
+                placeholder="Enter name..."
+                className="text-2xl font-bold text-primary bg-transparent border-b border-primary outline-none"
+              />
+            ) : (
+              <div className="flex items-center gap-2">
+                {getName(escrow.address) ? (
+                  <h1
+                    className="text-2xl font-bold text-primary cursor-pointer hover:text-secondary transition-colors"
+                    onClick={() => {
+                      setEditNameValue(getName(escrow.address) || '');
+                      setIsEditingName(true);
+                    }}
+                    title="Click to edit name"
+                  >
+                    {getName(escrow.address)}
+                  </h1>
+                ) : (
+                  <>
+                    <h1 className="text-2xl font-bold text-primary">
+                      {tokenMetadata?.symbol || 'Unknown Token'} Escrow
+                    </h1>
+                    <button
+                      onClick={() => {
+                        setEditNameValue('');
+                        setIsEditingName(true);
+                      }}
+                      className="text-tertiary hover:text-secondary transition-colors"
+                      title="Set custom name"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
             {escrow.status && <StatusBadge status={escrow.status} />}
           </div>
         </div>
-        <button
-          onClick={() => {
-            setIsRefreshing(true);
-            refetch();
-            setTimeout(() => setIsRefreshing(false), 600);
-          }}
-          disabled={isRefreshing}
-          className="p-2 text-secondary hover:text-primary transition-colors disabled:pointer-events-none"
-          title="Refresh"
-        >
-          <RefreshIcon size={18} spinning={isRefreshing} />
-        </button>
+        <div className="flex items-center">
+          <StarButton address={escrow.address} size={20} />
+          <button
+            onClick={() => {
+              setIsRefreshing(true);
+              refetch();
+              setTimeout(() => setIsRefreshing(false), 600);
+            }}
+            disabled={isRefreshing}
+            className="p-2 text-secondary hover:text-primary transition-colors disabled:pointer-events-none"
+            title="Refresh"
+          >
+            <RefreshIcon size={18} spinning={isRefreshing} />
+          </button>
+        </div>
       </div>
 
       {/* Progress */}
@@ -178,12 +225,21 @@ export default function EscrowDetail() {
       </div>
 
       {/* Amounts */}
-      <div className="grid md:grid-cols-4 gap-4">
+      <div className="grid md:grid-cols-3 gap-4">
         <AmountCard
-          label="Total"
-          amount={amounts.total}
+          label="Claimable"
+          amount={amounts.claimable}
           decimals={decimals}
-          value={formatValue(amounts.total)}
+          value={formatValue(amounts.claimable)}
+          action={showClaim ? (
+            <ClaimButton
+              escrowAddress={escrow.address}
+              unclaimed={amounts.claimable}
+              recipient={escrow.recipient}
+              onSuccess={() => refetch()}
+              compact
+            />
+          ) : undefined}
         />
         <AmountCard
           label="Claimed"
@@ -192,33 +248,18 @@ export default function EscrowDetail() {
           value={formatValue(amounts.claimed)}
         />
         <AmountCard
-          label="Claimable"
-          amount={amounts.claimable}
+          label="Total"
+          amount={amounts.total}
           decimals={decimals}
-          value={formatValue(amounts.claimable)}
-          highlight={amounts.claimable > 0n}
-        />
-        <AmountCard
-          label="Locked"
-          amount={amounts.locked}
-          decimals={decimals}
-          value={formatValue(amounts.locked)}
+          value={formatValue(amounts.total)}
         />
       </div>
 
       {/* Actions */}
-      {(showClaim || showRevoke || showDisown) && (
+      {(showRevoke || showDisown) && (
         <div className="p-6 border border-divider-strong rounded-lg">
           <h2 className="text-lg font-semibold text-primary mb-4">Actions</h2>
           <div className="flex flex-wrap gap-4">
-            {showClaim && (
-              <ClaimButton
-                escrowAddress={escrow.address}
-                unclaimed={amounts.claimable}
-                recipient={escrow.recipient}
-                onSuccess={() => refetch()}
-              />
-            )}
             {showRevoke && (
               <RevokeButton
                 escrowAddress={escrow.address}
@@ -295,20 +336,20 @@ function AmountCard({
   amount,
   decimals,
   value,
-  highlight = false,
+  action,
 }: {
   label: string;
   amount: bigint;
   decimals: number;
   value: string | null;
-  highlight?: boolean;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="relative p-4 border rounded-lg border-divider-strong">
-      {highlight && (
-        <div
-          className="absolute top-2 left-2 w-2 h-2 rounded-full animate-pulse bg-claimable"
-        />
+      {action && (
+        <div className="absolute top-2 right-2">
+          {action}
+        </div>
       )}
       <div className="text-sm text-secondary mb-1">{label}</div>
       <TokenAmount value={amount} decimals={decimals} className="text-lg font-medium text-primary block" />
