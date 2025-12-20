@@ -21,9 +21,7 @@ import { useRecentlyViewed } from '../hooks/useRecentlyViewed';
 import {
   formatUSD,
   formatDateTime,
-  formatDuration,
   formatDurationHuman,
-  formatRelativeTime,
 } from '../lib/format';
 import {
   mergeEscrowData,

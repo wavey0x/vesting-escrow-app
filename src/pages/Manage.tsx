@@ -8,6 +8,7 @@ import EscrowCard from '../components/EscrowCard';
 import { useEscrows, useEscrowsByAddress } from '../hooks/useEscrows';
 import { useRecentlyViewed } from '../hooks/useRecentlyViewed';
 import { useTokens } from '../hooks/useTokens';
+import { IndexedEscrow } from '../lib/types';
 
 type Tab = 'my-escrows' | 'recently-viewed' | 'search';
 
@@ -17,17 +18,7 @@ export default function Manage() {
   const [activeTab, setActiveTab] = useState<Tab>('my-escrows');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchError, setSearchError] = useState('');
-  const [searchResults, setSearchResults] = useState<Array<{
-    address: string;
-    token: string;
-    recipient: string;
-    funder: string;
-    amount: string;
-    vestingStart: number;
-    vestingDuration: number;
-    cliffLength: number;
-    openClaim: boolean;
-  }> | null>(null);
+  const [searchResults, setSearchResults] = useState<IndexedEscrow[] | null>(null);
 
   const { escrows: myEscrows, isLoading: loadingEscrows } = useEscrowsByAddress(address);
   const { items: recentlyViewed } = useRecentlyViewed();
