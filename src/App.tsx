@@ -12,7 +12,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Manage />} />
         <Route path="/create" element={<Create />} />
-        <Route path="/view/:address" element={<EscrowDetail />} />
+        <Route path="/vest/:address" element={<EscrowDetail />} />
       </Routes>
     </Layout>
   );

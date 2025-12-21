@@ -25,7 +25,7 @@ export default function Layout({ children }: LayoutProps) {
           <nav className="flex items-center gap-4 sm:gap-6">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path ||
-                (item.path === '/' && location.pathname.startsWith('/view/'));
+                (item.path === '/' && location.pathname.startsWith('/vest/'));
               return (
                 <Link
                   key={item.path}

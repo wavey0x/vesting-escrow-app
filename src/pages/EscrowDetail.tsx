@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { isAddress, Address as ViemAddress, maxUint256 } from 'viem';
 import Spinner from '../components/Spinner';
@@ -51,6 +51,18 @@ const escrowAbi = [
 export default function EscrowDetail() {
   const { address: escrowAddress } = useParams<{ address: string }>();
   const { address: userAddress } = useAccount();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleBack = () => {
+    // If we navigated from within the app (state.fromApp), go back to previous page
+    // Otherwise (direct link), go to home which uses default tab priority
+    if (location.state?.fromApp) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
 
   const { escrow: indexedEscrow, isLoading: loadingIndex } = useEscrowByAddress(escrowAddress);
   const { data: liveData, isLoading: loadingLive, refetch } = useLiveEscrowData(escrowAddress);
@@ -125,11 +137,11 @@ export default function EscrowDetail() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <Link to="/" className="inline-flex items-center text-secondary hover:text-primary mb-2">
-            <svg className="w-6 h-5" fill="none" stroke="currentColor" viewBox="0 0 28 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M27 12H3M10 19l-7-7 7-7" />
+          <button onClick={handleBack} className="inline-flex items-center justify-center px-1.5 py-0.5 border border-divider-strong rounded text-secondary hover:text-primary hover:border-primary transition-colors mb-2">
+            <svg className="w-5 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 12H4M9 19l-7-7 7-7" />
             </svg>
-          </Link>
+          </button>
           <div className="flex items-center gap-3">
             <TokenLogo
               address={escrow.token}

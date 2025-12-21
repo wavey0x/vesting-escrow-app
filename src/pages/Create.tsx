@@ -248,7 +248,7 @@ export default function Create() {
         <p className="text-secondary mb-6">
           Your vesting escrow has been deployed successfully.
         </p>
-        <Button onClick={() => navigate(`/view/${createdEscrow}`)}>
+        <Button onClick={() => navigate(`/vest/${createdEscrow}`, { state: { fromApp: true } })}>
           View Escrow
         </Button>
       </div>

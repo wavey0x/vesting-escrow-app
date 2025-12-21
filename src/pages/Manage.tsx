@@ -167,7 +167,7 @@ export default function Manage() {
     );
 
     if (escrow) {
-      navigate(`/view/${trimmedQuery}`);
+      navigate(`/vest/${trimmedQuery}`, { state: { fromApp: true } });
       return;
     }
 

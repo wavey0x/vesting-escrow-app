@@ -60,7 +60,8 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
 
   return (
     <Link
-      to={`/view/${escrow.address}`}
+      to={`/vest/${escrow.address}`}
+      state={{ fromApp: true }}
       className="relative block pt-2 px-4 pb-4 border border-divider-strong rounded-lg hover:border-primary transition-all duration-200"
     >
       {/* Star - snug in top-right corner */}

@@ -89,10 +89,10 @@ export default function VestingTimeline({
           })()}
         </div>
 
-        {/* Cliff marker with tooltip - outside overflow-hidden */}
+        {/* Cliff marker with tooltip - outside overflow-hidden but inset to fit within bar border */}
         {hasCliff && cliffPosition > 0 && cliffPosition < 100 && (
           <div
-            className="absolute top-0 bottom-0 w-3 -ml-1.5 group cursor-default flex justify-center z-10"
+            className="absolute top-[1px] bottom-[1px] w-3 -ml-1.5 group cursor-default flex justify-center z-10"
             style={{ left: `${cliffPosition}%` }}
           >
             <div className="w-px h-full bg-amber-600 dark:bg-amber-400" />
