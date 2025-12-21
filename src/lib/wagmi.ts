@@ -3,6 +3,7 @@ import { mainnet } from 'wagmi/chains';
 import { walletConnect } from 'wagmi/connectors';
 
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
+const rpcUrl = import.meta.env.VITE_MAINNET_RPC || 'https://eth.llamarpc.com';
 
 export const config = createConfig({
   chains: [mainnet],
@@ -13,7 +14,9 @@ export const config = createConfig({
   // EIP-6963 discovery - detects all installed wallets (MetaMask, Rabby, etc.)
   multiInjectedProviderDiscovery: true,
   transports: {
-    [mainnet.id]: http(),
+    [mainnet.id]: http(rpcUrl, {
+      batch: true,
+    }),
   },
 });
 
