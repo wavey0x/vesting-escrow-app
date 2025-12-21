@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { isAddress } from 'viem';
@@ -86,12 +86,23 @@ export default function Manage() {
   const { data: escrowsIndex, isLoading: loadingIndex } = useEscrows();
   const { data: tokensIndex } = useTokens();
 
-  // Set default tab based on state:
+  // Track if we've set the initial tab (only do it once)
+  const hasSetInitialTab = useRef(false);
+
+  // Set default tab based on state (only once, after data loads):
   // - If has stars: Starred (highest priority)
   // - If wallet connected AND has escrows: My Escrows
   // - Otherwise: Search
   useEffect(() => {
-    if (searchParams.get('q')) return; // URL query takes precedence
+    if (hasSetInitialTab.current) return; // Already set, don't override user selection
+    if (searchParams.get('q')) {
+      hasSetInitialTab.current = true;
+      return; // URL query takes precedence
+    }
+    // Wait for escrows to load before deciding (if connected)
+    if (isConnected && myEscrows === undefined) return;
+
+    hasSetInitialTab.current = true;
     if (starred.length > 0) {
       setActiveTab('starred');
     } else if (isConnected && myEscrows && myEscrows.length > 0) {
@@ -99,7 +110,7 @@ export default function Manage() {
     } else {
       setActiveTab('search');
     }
-  }, [myEscrows]);
+  }, [myEscrows, starred.length, isConnected, searchParams]);
 
   // Get starred escrows from index
   const starredEscrows = useMemo(() => {
