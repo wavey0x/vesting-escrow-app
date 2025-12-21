@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { IndexedEscrow, TokenMetadata, LiveEscrowData } from '../lib/types';
-import { formatDate, formatDurationHuman } from '../lib/format';
+import { formatDate } from '../lib/format';
 import { getVestingProgress, mergeEscrowData } from '../lib/escrow';
 import Address from './Address';
 import TokenLogo from './TokenLogo';
@@ -125,28 +125,30 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
         <ProgressBar progress={progress} showLabel cliffPercent={cliffPercent} />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div>
-          <span className="text-tertiary">Recipient:</span>{' '}
-          <Address address={escrow.recipient} showCopy showLink={false} className="text-secondary" />
+      <div className="flex justify-between sm:justify-start sm:gap-24 text-sm">
+        <div className="space-y-1">
+          <div>
+            <span className="text-tertiary">Recipient:</span>{' '}
+            <Address address={escrow.recipient} showCopy showLink={false} className="text-secondary" />
+          </div>
+          <div>
+            <span className="text-tertiary">Cliff:</span>{' '}
+            <span className="text-secondary">
+              {escrow.cliffLength > 0
+                ? formatDate(escrow.vestingStart + escrow.cliffLength)
+                : 'None'}
+            </span>
+          </div>
         </div>
-        <div>
-          <span className="text-tertiary">Duration:</span>{' '}
-          <span className="text-secondary">
-            {formatDurationHuman(escrow.vestingDuration)}
-          </span>
-        </div>
-        <div>
-          <span className="text-tertiary">Start:</span>{' '}
-          <span className="text-secondary">{formatDate(escrow.vestingStart)}</span>
-        </div>
-        <div>
-          <span className="text-tertiary">Cliff:</span>{' '}
-          <span className="text-secondary">
-            {escrow.cliffLength > 0
-              ? formatDate(escrow.vestingStart + escrow.cliffLength)
-              : 'None'}
-          </span>
+        <div className="space-y-1 flex-shrink-0">
+          <div className="whitespace-nowrap">
+            <span className="text-tertiary">Start:</span>{' '}
+            <span className="text-secondary">{formatDate(escrow.vestingStart)}</span>
+          </div>
+          <div className="whitespace-nowrap">
+            <span className="text-tertiary">End:</span>{' '}
+            <span className="text-secondary">{formatDate(escrow.vestingStart + escrow.vestingDuration)}</span>
+          </div>
         </div>
       </div>
     </Link>

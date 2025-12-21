@@ -113,75 +113,91 @@ export default function EscrowDetail() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Link to="/" className="text-secondary hover:text-primary">
-              View
-            </Link>
-            <span className="text-tertiary">/</span>
-            <span className="text-primary">Escrow Details</span>
-          </div>
+          <Link to="/" className="inline-flex items-center text-secondary hover:text-primary mb-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </Link>
           <div className="flex items-center gap-3">
             <TokenLogo
               address={escrow.token}
               symbol={tokenMetadata?.symbol}
               size={32}
             />
-            {isEditingName ? (
-              <input
-                type="text"
-                value={editNameValue}
-                onChange={(e) => setEditNameValue(e.target.value)}
-                onBlur={() => {
-                  setName(escrow.address, editNameValue);
-                  setIsEditingName(false);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    setName(escrow.address, editNameValue);
-                    setIsEditingName(false);
-                  } else if (e.key === 'Escape') {
-                    setIsEditingName(false);
-                  }
-                }}
-                autoFocus
-                placeholder="Enter name..."
-                className="text-2xl font-bold text-primary bg-transparent border-b border-primary outline-none"
-              />
-            ) : (
+            <div>
               <div className="flex items-center gap-2">
-                {getName(escrow.address) ? (
-                  <h1
-                    className="text-2xl font-bold text-primary cursor-pointer hover:text-secondary transition-colors"
-                    onClick={() => {
-                      setEditNameValue(getName(escrow.address) || '');
-                      setIsEditingName(true);
+                {isEditingName ? (
+                  <input
+                    type="text"
+                    value={editNameValue}
+                    onChange={(e) => setEditNameValue(e.target.value)}
+                    onBlur={() => {
+                      setName(escrow.address, editNameValue);
+                      setIsEditingName(false);
                     }}
-                    title="Click to edit name"
-                  >
-                    {getName(escrow.address)}
-                  </h1>
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        setName(escrow.address, editNameValue);
+                        setIsEditingName(false);
+                      } else if (e.key === 'Escape') {
+                        setIsEditingName(false);
+                      }
+                    }}
+                    autoFocus
+                    placeholder="Enter name..."
+                    className="text-2xl font-bold text-primary bg-transparent border-b border-primary outline-none"
+                  />
                 ) : (
                   <>
-                    <h1 className="text-2xl font-bold text-primary">
-                      {tokenMetadata?.symbol || 'Unknown Token'} Escrow
-                    </h1>
-                    <button
-                      onClick={() => {
-                        setEditNameValue('');
-                        setIsEditingName(true);
-                      }}
-                      className="text-tertiary hover:text-secondary transition-colors"
-                      title="Set custom name"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                    </button>
+                    {getName(escrow.address) ? (
+                      <h1
+                        className="text-2xl font-bold text-primary cursor-pointer hover:text-secondary transition-colors"
+                        onClick={() => {
+                          setEditNameValue(getName(escrow.address) || '');
+                          setIsEditingName(true);
+                        }}
+                        title="Click to edit name"
+                      >
+                        {getName(escrow.address)}
+                      </h1>
+                    ) : (
+                      <>
+                        <h1 className="text-2xl font-bold text-primary">
+                          {tokenMetadata?.symbol || 'Unknown Token'} Escrow
+                        </h1>
+                        <button
+                          onClick={() => {
+                            setEditNameValue('');
+                            setIsEditingName(true);
+                          }}
+                          className="text-tertiary hover:text-secondary transition-colors"
+                          title="Set custom name"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
+                <StatusBadge status={escrow.status} isLoading={loadingLive} />
               </div>
-            )}
-            <StatusBadge status={escrow.status} isLoading={loadingLive} />
+              <div className="flex items-center gap-1.5 mt-1">
+                <Address address={escrow.address} showCopy showLink={false} className="text-sm text-secondary" />
+                <a
+                  href={`https://etherscan.io/address/${escrow.address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-tertiary hover:text-primary transition-colors"
+                  title="View on Etherscan"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            </div>
           </div>
         </div>
         <div className="flex items-center">
