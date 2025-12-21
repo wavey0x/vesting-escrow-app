@@ -20,7 +20,7 @@ export default function Layout({ children }: LayoutProps) {
       <header className="sticky top-0 z-50 bg-background border-b border-divider-subtle">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="hidden sm:block text-xl font-semibold text-primary w-24">
-            Vests
+            Vest
           </Link>
           <nav className="flex items-center gap-4 sm:gap-6">
             {navItems.map((item) => {

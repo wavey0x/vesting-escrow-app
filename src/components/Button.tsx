@@ -3,7 +3,7 @@ import Spinner from './Spinner';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   loading?: boolean;
   children: ReactNode;
 }
@@ -15,6 +15,7 @@ const variants = {
 };
 
 const sizes = {
+  xs: 'px-2 py-1 text-xs',
   sm: 'px-3 py-1.5 text-sm',
   md: 'px-4 py-2 text-base',
   lg: 'px-6 py-3 text-lg',

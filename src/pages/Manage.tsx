@@ -86,6 +86,13 @@ export default function Manage() {
   const { data: escrowsIndex, isLoading: loadingIndex } = useEscrows();
   const { data: tokensIndex } = useTokens();
 
+  // Default to search tab if no wallet connected and no favorites
+  useEffect(() => {
+    if (!searchParams.get('q') && !isConnected && starred.length === 0) {
+      setActiveTab('search');
+    }
+  }, []);
+
   // Get starred escrows from index
   const starredEscrows = useMemo(() => {
     if (!escrowsIndex?.escrows) return [];
@@ -174,11 +181,12 @@ export default function Manage() {
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     {
-      id: 'my-escrows',
-      label: 'My Escrows',
+      id: 'search',
+      label: 'Search',
       icon: (
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
         </svg>
       ),
     },
@@ -186,18 +194,17 @@ export default function Manage() {
       id: 'starred',
       label: 'Starred',
       icon: (
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
         </svg>
       ),
     },
     {
-      id: 'search',
-      label: 'Search',
+      id: 'my-escrows',
+      label: 'My Escrows',
       icon: (
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="11" cy="11" r="8" />
-          <path d="m21 21-4.35-4.35" />
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
         </svg>
       ),
     },
@@ -205,10 +212,6 @@ export default function Manage() {
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
-      <div>
-        <h1 className="text-xl text-primary text-center">View Escrows</h1>
-      </div>
-
       {/* Tabs */}
       <div className="border-b border-divider-subtle">
         <nav className="flex gap-6">

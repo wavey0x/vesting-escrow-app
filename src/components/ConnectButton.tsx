@@ -5,14 +5,13 @@ import Spinner from './Spinner';
 
 export default function ConnectButton() {
   const { address, isConnected, isConnecting } = useAccount();
-  const { connect, connectors, isPending } = useConnect();
+  const { connect, connectors, isPending, reset } = useConnect();
   const { disconnect } = useDisconnect();
 
   if (isConnecting || isPending) {
     return (
-      <Button variant="secondary" size="sm" disabled>
-        <Spinner size="sm" />
-        Connecting...
+      <Button variant="secondary" size="xs" onClick={() => { reset(); disconnect(); }}>
+        Cancel
       </Button>
     );
   }
@@ -29,30 +28,20 @@ export default function ConnectButton() {
     );
   }
 
-  // Find injected connector first
-  const injectedConnector = connectors.find((c) => c.id === 'injected');
-  const walletConnectConnector = connectors.find((c) => c.id === 'walletConnect');
+  // Prefer real wallets (MetaMask, Rabby) over Brave or generic injected
+  const preferredConnector = connectors.find((c) =>
+    c.type === 'injected' &&
+    c.name !== 'Brave Wallet' &&
+    c.id !== 'injected'
+  ) || connectors.find((c) => c.type === 'injected');
 
   return (
-    <div className="flex items-center gap-2">
-      {injectedConnector && (
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => connect({ connector: injectedConnector })}
-        >
-          Connect Wallet
-        </Button>
-      )}
-      {walletConnectConnector && (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => connect({ connector: walletConnectConnector })}
-        >
-          WalletConnect
-        </Button>
-      )}
-    </div>
+    <Button
+      variant="primary"
+      size="xs"
+      onClick={() => preferredConnector && connect({ connector: preferredConnector })}
+    >
+      Connect
+    </Button>
   );
 }
