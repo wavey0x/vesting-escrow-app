@@ -1,22 +1,41 @@
-import { http, createConfig } from 'wagmi';
+import { http, createConfig, fallback } from 'wagmi';
 import { mainnet } from 'wagmi/chains';
 import { walletConnect } from 'wagmi/connectors';
 
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
-const rpcUrl = import.meta.env.VITE_MAINNET_RPC || 'https://ethereum-rpc.publicnode.com';
+
+// Multiple RPC providers for load balancing and failover
+// Only using providers that support CORS for browser requests
+// viem's fallback() automatically:
+// - Tries providers in order
+// - Falls back on failure
+// - Ranks by latency over time
+const rpcProviders = [
+  'https://eth.llamarpc.com',
+  'https://ethereum-rpc.publicnode.com',
+  'https://eth.drpc.org',
+  'https://rpc.mevblocker.io',
+];
+
+// Allow override via env var (prepended as primary)
+const customRpc = import.meta.env.VITE_MAINNET_RPC;
+const allProviders = customRpc
+  ? [customRpc, ...rpcProviders]
+  : rpcProviders;
 
 export const config = createConfig({
   chains: [mainnet],
-  // Don't manually specify injected() - let multiInjectedProviderDiscovery find all wallets
   connectors: [
     ...(projectId ? [walletConnect({ projectId })] : []),
   ],
-  // EIP-6963 discovery - detects all installed wallets (MetaMask, Rabby, etc.)
   multiInjectedProviderDiscovery: true,
   transports: {
-    [mainnet.id]: http(rpcUrl, {
-      batch: true,
-    }),
+    // fallback() tries providers in order, ranks by latency over time
+    // readContracts automatically uses Multicall3 contract for batching
+    [mainnet.id]: fallback(
+      allProviders.map(url => http(url)),
+      { rank: true, retryCount: 3 }
+    ),
   },
 });
 

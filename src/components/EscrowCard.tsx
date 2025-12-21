@@ -36,7 +36,8 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
   // Only fetch if liveData not provided (backward compatibility for detail page)
   const { data: fetchedLiveData } = useLiveEscrowData(providedLiveData ? undefined : escrow.address);
   const liveData = providedLiveData ?? fetchedLiveData;
-  const isLoading = isLoadingLiveData ?? !liveData;
+  // Use || not ?? - we're loading if batch is loading OR if we don't have data for this escrow
+  const isLoading = isLoadingLiveData || !liveData;
 
   const fullEscrow = mergeEscrowData(escrow, liveData);
   const progress = getVestingProgress(fullEscrow);

@@ -37,7 +37,8 @@ export function getEscrowStatus(escrow: Escrow): EscrowStatus {
   }
 
   // Check if completed (nothing left to claim or locked)
-  if (live.unclaimed === 0n && live.locked === 0n) {
+  // Use Number() to handle both bigint 0n and number 0 from different RPC responses
+  if (Number(live.unclaimed) === 0 && Number(live.locked) === 0) {
     return 'completed';
   }
 
@@ -47,7 +48,7 @@ export function getEscrowStatus(escrow: Escrow): EscrowStatus {
   }
 
   // Check if fully vested (all unlocked, some unclaimed)
-  if (live.locked === 0n && live.unclaimed > 0n) {
+  if (Number(live.locked) === 0 && Number(live.unclaimed) > 0) {
     return 'claimable';
   }
 

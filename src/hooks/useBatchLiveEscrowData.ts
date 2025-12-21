@@ -5,8 +5,10 @@ import { Address } from 'viem';
 import { LiveEscrowData } from '../lib/types';
 import { config } from '../lib/wagmi';
 
-// Max escrows per batch to avoid RPC payload limits (20 escrows × 10 calls = 200 calls per batch)
-const MAX_ESCROWS_PER_BATCH = 20;
+// Max escrows per batch for multicall
+// readContracts uses Multicall3 contract automatically (1 RPC call per batch)
+// 15 escrows × 10 functions = 150 calls per multicall - balanced for response size limits
+const MAX_ESCROWS_PER_BATCH = 15;
 
 const escrowAbi = [
   {
