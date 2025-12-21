@@ -35,7 +35,7 @@ export default function ProgressBar({
         />
         {hasCliff && (
           <div
-            className="absolute top-0 bottom-0 w-0.5 bg-blue-900 dark:bg-blue-400"
+            className="absolute top-0 bottom-0 w-0.5 bg-amber-600 dark:bg-amber-400"
             style={{ left: `${cliffPercent}%` }}
           />
         )}

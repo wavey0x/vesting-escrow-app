@@ -1,26 +1,28 @@
 # Minimal Monochrome Data UI — Aesthetic Style Guide
 
-This guide describes a **clean, neutral, data-first aesthetic** that can be applied to *any* app.  
+This guide describes a **clean, neutral, data-first aesthetic** that can be applied to *any* app.
 It avoids brand, color, or product assumptions and focuses purely on visual tone, hierarchy, and restraint.
 
 ---
 
 ## Core aesthetic
 
-- **Quiet, document-like UI**  
-  Feels closer to a technical paper or ledger than a “web app”.
-- **Monochrome by default**  
+- **Quiet, document-like UI**
+  Feels closer to a technical paper or ledger than a "web app".
+- **Monochrome by default**
   No strong accent colors. Hierarchy comes from spacing, weight, and rules.
-- **Lines over boxes**  
+- **Lines over boxes**
   Use thin dividers instead of cards, shadows, or backgrounds.
-- **Dense but calm**  
+- **Dense but calm**
   Compact rows, small type, generous vertical spacing between sections.
 
 ---
 
-## Color system (neutral)
+## Color system
 
-Use a *very small* grayscale palette.
+Use a *very small* grayscale palette with dark mode support.
+
+### Light mode
 
 - Background: `#FFFFFF`
 - Primary text: `#111111`
@@ -28,21 +30,39 @@ Use a *very small* grayscale palette.
 - Tertiary / faint text: `#9A9A9A`
 - Strong divider: `#CCCCCC`
 - Subtle divider: `#E6E7EB`
-- Hover background (optional): `rgba(0,0,0,0.03–0.05)`
+- Hover background: `rgba(0,0,0,0.03–0.05)`
 
-**Rules**
-- No color used for meaning.
-- Active states are weight + underline, not color.
-- Icons inherit text color.
+### Dark mode
+
+- Background: `#1A1A1A` (soft black, not pure `#000000`)
+- Primary text: `#FAFAFA`
+- Secondary text: `#D8D8D8`
+- Tertiary / faint text: `#A0A0A0`
+- Strong divider: `#404040`
+- Subtle divider: `#2A2A2A`
+- Hover background: `rgba(255,255,255,0.03–0.05)`
+
+**Dark mode philosophy:**
+- Invert the palette, not the design
+- Maintain the same contrast ratios
+- Soft black is easier on the eyes than pure black
+- Text should feel bright but not harsh
+
+### Color rules
+
+- No color used for decorative purposes
+- Active states use weight + underline, not color
+- Icons inherit text color
+- Status badges are the **one exception** — see Status indicators section
 
 ---
 
 ## Typography
 
 ### Font choices
-- **Primary UI font**: system sans-serif  
+- **Primary UI font**: system sans-serif
   (`system-ui`, `-apple-system`, `Segoe UI`, etc.)
-- **Data font**: system monospace  
+- **Data font**: system monospace
   (`ui-monospace`, `SFMono`, `Menlo`, `Consolas`)
 
 ### Type scale (approximate)
@@ -81,6 +101,15 @@ Guidelines:
 - Center important titles; left-align dense data
 - Avoid background panels or cards
 
+### Layout stability
+
+Prevent layout shifts that feel jarring:
+
+- Use `overflow-y: scroll` on the html element to prevent scrollbar appearance from shifting content
+- Set `min-height` on containers that may have variable content
+- Set `min-width` on badges and status indicators
+- Use skeleton placeholders that match final content dimensions
+
 ---
 
 ## Dividers & structure
@@ -100,51 +129,245 @@ Think *ledger*, not *dashboard*.
 ## Navigation & tabs
 
 - Minimal text-only tabs or toggles
+- Icons permitted but must be monochrome and inherit text color
 - Active state:
   - Darker text
   - Slightly heavier weight
-  - Thin underline
+  - Thin underline (2px, offset for breathing room)
 - Inactive state:
   - Muted text
   - No background
 
 No pills, no fills, no shadows.
 
----
+### Back navigation
 
-## Tables & data presentation
-
-### Table styling
-- No outer border
-- Horizontal rules only
-- White background
-
-### Headers
-- Uppercase
-- Small
-- Muted
-- Letter-spaced
-
-### Rows
-- Compact height
-- Subtle separators
-- Optional faint hover highlight
-
-### Numbers & identifiers
-- Always monospace
-- Large values may wrap or break gracefully
-- Use faint → dark to show change or progression
+- Prefer a simple back arrow icon over breadcrumbs
+- Use a proper arrow with tail (`←`), not a chevron (`<`)
+- Position above the page title
+- Muted color, brightens on hover
 
 ---
 
-## Hierarchy inside data
+## Cards & list items
 
-For nested or structured data:
+When displaying collections of items (e.g., records, entries):
 
-- Indentation communicates structure
-- Repetition of type/label/value patterns
-- Avoid icons unless necessary
-- Use subtle tree guides or spacing, not heavy visuals
+### Structure
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ☆                                                           │  ← action in corner
+│ [Icon] Title / Name              Identifier    ○            │
+│        Subtitle / Amount                                    │
+│                                                             │
+│ ═══════════════════════════════════════════════════════ 42% │  ← progress bar
+│                                                             │
+│ Label: Value              Label: Value                      │
+│ Label: Value              Label: Value                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Styling
+- Border: `1px` strong divider color
+- Border radius: small (`4–8px`) — exception to "no rounded" rule for touch targets
+- Hover: border color transitions to primary
+- Padding: `16px`
+
+### Action buttons in cards
+- Position absolutely in corners (top-right for favorites/stars)
+- Very snug positioning (`2–4px` from edge)
+- Actions are "first-class citizens" — not bound by content padding
+- Use subtle icons that brighten on hover
+
+### Responsive behavior
+- Use `justify-between` on mobile to maximize space
+- Reduce gaps between columns on smaller screens
+- Prevent text wrapping with `whitespace-nowrap` on critical data
+- Allow less important columns to compress
+
+---
+
+## Status indicators & badges
+
+**This is the one area where color is permitted**, because status requires quick visual scanning.
+
+### Design
+- Small pill shape with subtle background
+- Muted, desaturated colors — not bright or saturated
+- Text should remain readable
+- Set `min-width` to prevent layout shift when status changes
+
+### Status color palette (light mode)
+
+| Status | Background | Text |
+|--------|------------|------|
+| Active/In Progress | `amber-100` | `amber-700` |
+| Success/Complete | `emerald-100` | `emerald-700` |
+| Available/Ready | `green-100` | `green-700` |
+| Neutral/Done | `gray-100` | `gray-600` |
+
+### Status color palette (dark mode)
+
+| Status | Background | Text |
+|--------|------------|------|
+| Active/In Progress | `amber-900/40` | `amber-300` |
+| Success/Complete | `emerald-900/40` | `emerald-300` |
+| Available/Ready | `green-900/40` | `green-300` |
+| Neutral/Done | `gray-800` | `gray-400` |
+
+### Loading state
+- Show a skeleton placeholder matching badge dimensions
+- Subtle pulse animation
+- Prevents incorrect status from flashing before data loads
+
+---
+
+## Toggle switches
+
+For boolean settings (e.g., "Hide completed"):
+
+### Design
+- Small horizontal pill shape
+- Circular knob that slides
+- Height: `20px`, Width: `36px`
+- Knob: `14px` diameter
+
+### Styling
+- Track (off): subtle divider color
+- Track (on): strong divider color (not accent color)
+- Knob: white with subtle border
+- Border on knob prevents it from disappearing against light backgrounds
+
+### Avoid
+- Bright colored tracks (green, blue)
+- Large chunky toggles
+- Toggle without adjacent label
+
+---
+
+## Addresses & identifiers
+
+For blockchain addresses, hashes, or long identifiers:
+
+### Display format
+- Abbreviated: `0x1234...5678` (4 chars + ... + 4 chars)
+- Always monospace font
+- Secondary/muted text color
+
+### Actions (inline)
+- Copy button: small icon, appears inline
+- External link: small outbound arrow icon
+- Both icons muted, brighten on hover
+
+### Example
+```
+0xA3a8...467c [copy] [↗]
+```
+
+---
+
+## Progress meters & timeline visualization
+
+Progress indicators should feel like **technical diagrams**, not dashboard widgets.
+
+### Linear progress bar
+
+**Styling:**
+- Outer container: subtle background, small border-radius
+- Height: `8px` (thin, not chunky)
+- No outer border in simplified variant
+
+**Fill patterns:**
+- In progress: diagonal hatched pattern (greyscale stripes)
+- Complete (100%): solid fill (no hatching)
+- Hatching creates visual interest without color
+
+**CSS for hatched pattern:**
+```css
+background: repeating-linear-gradient(
+  -45deg,
+  #888,
+  #888 2px,
+  #bbb 2px,
+  #bbb 4px
+);
+```
+
+**Markers:**
+- Cliff/milestone marker: thin vertical line in accent color (blue)
+- Current position: solid block at end of filled portion
+
+### Segmented variant (claimed / claimable / locked)
+
+```
+┌────────────────────────────────────────────────────────┐
+│███████████████│▒▒▒▒▒▒▒▒▒▒▒▒│                           │
+│   claimed     │  claimable │         locked            │
+└────────────────────────────────────────────────────────┘
+```
+
+- Claimed: solid grey fill
+- Claimable: hatched pattern
+- Locked: empty / background color
+- Current position marker: solid vertical line at boundary
+
+### Vesting timeline
+
+A horizontal axis showing temporal milestones (start, cliff, now, end).
+
+**Structure:**
+```
+START              CLIFF                NOW                    END
+  │                  │                   │                      │
+  ├──────────────────┼───────────────────●──────────────────────┤
+  │                  │                   │                      │
+Jan 2024         Apr 2024           Aug 2024              Jan 2025
+```
+
+**Styling:**
+- Main axis: border with background
+- Milestone labels: small uppercase, muted, letter-spaced
+- Date values: small, monospace
+- Cliff marker: distinct color (muted blue) for visibility
+
+---
+
+## Loading states & spinners
+
+Loading indicators should be **minimal and mechanical**, not playful.
+
+### Progressive loading strategy
+
+1. Show layout structure immediately
+2. Display cached/static data first
+3. Show skeleton placeholders for pending data
+4. Fill in live data as it arrives
+
+**Never block the entire UI waiting for slow data.**
+
+### Skeleton loading
+
+For content areas awaiting data:
+
+- Use blocks matching expected content dimensions
+- Color: subtle divider with gentle pulse animation
+- Match the layout to prevent content shift
+- No shimmer gradients — too decorative
+
+### Primary spinner
+
+- Shape: thin circular arc (270°)
+- Stroke: `1–2px`, primary text color
+- Size: `16–24px` inline, `32–48px` page-level
+- Animation: continuous rotation, `0.8–1.2s`, linear
+
+### Inline field loading
+
+For individual values being fetched:
+
+- Small spinner (`12–14px`) replacing the pending value
+- Maintains exact layout position
+- Replace with value when loaded, "—" if failed
 
 ---
 
@@ -158,261 +381,99 @@ For nested or structured data:
   - Reveal content
   - Do not recolor parent rows
 
----
+### External links
 
-## Progress meters & timeline visualization
-
-Progress indicators should feel like **technical diagrams**, not dashboard widgets.
-
-### Linear progress bar
-
-A horizontal bar representing completion or vesting progress.
-
-**Structure:**
-```
-┌─────────────────────────────────────────────────────────┐
-│██████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░│
-└─────────────────────────────────────────────────────────┘
-```
-
-**Styling:**
-- Outer container: `1px` border, `#CCCCCC`, no border-radius
-- Filled portion: solid `#111111`
-- Unfilled portion: `#E6E7EB` or subtle diagonal hatching
-- Height: `4–8px` (thin, not chunky)
-- No rounded ends, no gradients, no glow
-
-**Segmented variant** (for showing claimed / claimable / locked):
-```
-┌────────────────────────────────────────────────────────┐
-│███████████████│░░░░░░░░░░░░│                           │
-│   claimed     │  claimable │         locked            │
-└────────────────────────────────────────────────────────┘
-```
-
-- Claimed: solid fill `#111111`
-- Claimable: diagonal hatching or dense dots `#111111`
-- Locked: empty / white with subtle border
-- Segment dividers: `1px` vertical line `#CCCCCC`
-
-### Vesting timeline
-
-A horizontal axis showing temporal milestones (start, cliff, now, end).
-
-**Structure:**
-```
-START              CLIFF                NOW                    END
-  │                  │                   ▼                      │
-  ├──────────────────┼───────────────────●──────────────────────┤
-  │                  │                   │                      │
-2024-01-01      2024-04-01          2024-08-15             2025-01-01
-```
-
-**Styling:**
-- Main axis: `1px` solid line `#111111`
-- Tick marks: short vertical lines `4–8px` tall
-- Milestone labels: `10–11px` uppercase, muted, letter-spaced
-- Date values: `11–12px` monospace, primary text
-- Current position marker: small filled circle `●` or thin vertical line
-- Avoid arrows, triangles, or decorative markers
-
-**Cliff visualization:**
-- Cliff period can use a patterned fill (diagonal lines) on the timeline
-- Or simply mark with a distinct tick and label
-- No color differentiation — use pattern or emptiness
-
-### Numeric annotations
-
-Always pair visual progress with exact values:
-
-```
-VESTED          42,500.00 / 100,000.00 TOKEN     42.5%
-                ─────────────────────────────────────
-CLAIMED         38,000.00 TOKEN
-CLAIMABLE        4,500.00 TOKEN
-LOCKED          57,500.00 TOKEN
-```
-
-- Values: monospace, right-aligned
-- Labels: muted, left-aligned
-- Percentages: optional, shown inline or as separate column
+- Include small outbound arrow icon (`↗`)
+- Opens in new tab
+- Icon is muted, brightens on hover
+- Position immediately after the linked text
 
 ---
 
-## Loading states & spinners
+## Responsive design
 
-Loading indicators should be **minimal and mechanical**, not playful.
+### Breakpoint philosophy
+- Mobile-first is not required — optimize for the primary use case
+- Ensure usability on mobile, but desktop density is acceptable
 
-### Primary spinner
+### Mobile adaptations
+- Reduce gaps between elements
+- Use `justify-between` to maximize horizontal space
+- Allow non-critical columns to compress
+- Prevent critical data from wrapping (`whitespace-nowrap`)
+- Stack elements vertically when horizontal space is insufficient
 
-A simple rotating element suggesting computation.
+### Touch targets
+- Minimum `44px` for primary actions
+- Cards and list items should be fully tappable
+- Corner actions (stars, menus) need adequate padding
 
-**Design:**
-- Shape: thin circular arc (not a full ring)
-- Stroke: `1–2px`, `#111111`
-- Arc length: approximately 270° (three-quarters)
-- Gap: 90° opening
-- Size: `16–24px` diameter for inline, `32–48px` for page-level
+---
 
-**Animation:**
-- Rotation: continuous `360deg`, linear easing
-- Duration: `0.8–1.2s` per revolution
-- No pulsing, scaling, or color changes
+## URL design & shareability
 
-**CSS reference:**
-```css
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 1.5px solid transparent;
-  border-top-color: #111111;
-  border-right-color: #111111;
-  border-bottom-color: #111111;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
+For apps with views that can be shared:
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+- Encode filter/search state in URL query parameters
+- Default values should be omitted from URL
+- Non-default values should be explicit
+- URLs should be human-readable when possible
+
+Example:
 ```
-
-### Alternative: tick spinner
-
-A more mechanical variant using discrete steps.
-
-**Design:**
-- 8 or 12 short radial lines arranged in a circle
-- Lines fade from `#111111` to `#E6E7EB`
-- Animation: discrete steps, each line highlights in sequence
-
-**Animation:**
-- Steps: `steps(8)` or `steps(12)` timing function
-- Duration: `0.8–1s` per cycle
-- Feels like a clock or dial indicator
-
-### Skeleton loading
-
-For content areas awaiting data:
-
-- Use subtle horizontal lines or blocks
-- Color: `#E6E7EB` with optional very subtle pulse (`opacity: 0.5 → 1`)
-- Match the expected layout dimensions
-- No shimmer gradients — too decorative
-
-**Skeleton example:**
+/view?q=0x1234...&hideCompleted=false
 ```
-┌─────────────────────────────────────┐
-│ ████████████████                    │  ← title placeholder
-│ ████████████████████████████████    │  ← text placeholder
-│ ████████████                        │  ← shorter line
-└─────────────────────────────────────┘
-```
-
-### Loading text
-
-When appropriate, use simple text:
-
-```
-Loading…
-```
-
-- Monospace font
-- Muted color `#6A6A6A`
-- Optional: animate ellipsis (`. → .. → ...`)
-- No spinner needed if text is sufficient
-
-### Inline field loading
-
-For individual data fields awaiting external data (e.g., prices, live contract data):
-
-**Structure:**
-```
-CLAIMABLE       1,500.00 YFI     ◐        ← spinner where USD value will appear
-LOCKED          3,500.00 YFI     $29,596.81
-```
-
-**Design:**
-- Spinner replaces the pending value, same position
-- Size: `12–14px` diameter (matches text line height)
-- Maintains layout stability — no content shift when data arrives
-
-**CSS reference:**
-```css
-.inline-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 1px solid transparent;
-  border-top-color: #6A6A6A;
-  border-right-color: #6A6A6A;
-  border-bottom-color: #6A6A6A;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  vertical-align: middle;
-}
-```
-
-**Behavior:**
-- Show spinner immediately when data fetch begins
-- Replace with actual value once loaded
-- If fetch fails, show "—" or muted "unavailable" text
-- Never leave spinner spinning indefinitely — timeout after 10s
-
-**Multiple fields loading:**
-```
-TOTAL VALUE         ◐
-                    ──────────
-CLAIMABLE           1,500.00 YFI     ◐
-LOCKED              3,500.00 YFI     ◐
-CLAIMED               500.00 YFI     ◐
-```
-
-Each field loads independently; replace each spinner as its data arrives.
-
-### Placement guidelines
-
-- Inline spinners: next to or replacing the element being loaded
-- Page spinners: centered, with generous whitespace
-- Never overlay with dark backgrounds or modals
-- Keep the page structure visible during load when possible
 
 ---
 
 ## Things to avoid
 
-- Bright accent colors
-- Cards, shadows, rounded containers
+- Bright accent colors (except muted status badges)
+- Cards with shadows
 - Heavy borders
 - Decorative icons
 - Gradients or depth effects
-- Color-based meaning
-- "Quick actions" panels or shortcut sections
+- Color-based meaning (except status)
+- "Quick actions" panels
 - Feature showcases or marketing sections
-- Redundant navigation (if it's in the nav, don't repeat it)
+- Redundant navigation
 - Hero images or decorative illustrations
-- Tooltips or help text unless absolutely necessary
+- Tooltips unless absolutely necessary
 - Empty states with illustrations
 - Onboarding flows or tutorials
+- Breadcrumbs (prefer back button)
+- Pure black (`#000000`) in dark mode
 
 ---
 
 ## Mental model to design against
 
-> “Could this be printed on paper and still feel correct?”
+> "Could this be printed on paper and still feel correct?"
 
 If yes, it matches the aesthetic.
+
+For dark mode:
+
+> "Is this a dark piece of paper, or a glowing screen?"
+
+It should feel like dark paper — muted, not emissive.
 
 ---
 
 ## Summary checklist
 
-- White background
-- Grayscale only
-- Lines > boxes
-- Weight > color
-- Monospace for data
-- Tight rows, loose sections
-- Calm, technical, timeless
+- [ ] Grayscale palette (with dark mode variant)
+- [ ] Lines > boxes
+- [ ] Weight > color
+- [ ] Monospace for data
+- [ ] Tight rows, loose sections
+- [ ] Layout stability (no shifts)
+- [ ] Progressive loading (never block on slow data)
+- [ ] Status badges are the only color exception
+- [ ] Muted, desaturated status colors
+- [ ] External links have outbound icon
+- [ ] Back button over breadcrumbs
+- [ ] Responsive gaps and wrapping
+- [ ] Shareable URLs with query params
 
-This aesthetic should feel **boringly correct** — and that’s the goal.
+This aesthetic should feel **boringly correct** — and that's the goal.

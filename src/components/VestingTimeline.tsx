@@ -48,7 +48,7 @@ export default function VestingTimeline({
   return (
     <div className="space-y-1">
       {/* Segmented progress bar */}
-      <div className="relative h-4 border border-divider-strong bg-background">
+      <div className="relative h-4 border border-divider-strong bg-background rounded-full overflow-hidden">
         {/* Progress segment - grey fill (claimed or time progress during cliff) */}
         {greyPercent > 0 && (
           <div
@@ -75,12 +75,17 @@ export default function VestingTimeline({
           />
         )}
 
-        {/* Cliff marker */}
+        {/* Cliff marker with tooltip */}
         {hasCliff && cliffPosition > 0 && cliffPosition < 100 && (
           <div
-            className="absolute top-0 bottom-0 w-px bg-blue-900 dark:bg-blue-400"
+            className="absolute top-0 bottom-0 w-3 -ml-1.5 group cursor-default flex justify-center"
             style={{ left: `${cliffPosition}%` }}
-          />
+          >
+            <div className="w-px h-full bg-amber-600 dark:bg-amber-400" />
+            <div className="absolute bottom-full mb-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+              Cliff: {formatDateFull(cliffEnd)}
+            </div>
+          </div>
         )}
 
         {/* Current time marker - at end of colored segments */}
@@ -106,20 +111,6 @@ export default function VestingTimeline({
             {formatDateFull(vestingStart)}
           </div>
         </div>
-
-        {/* Cliff */}
-        {hasCliff && cliffPosition > 12 && cliffPosition < 88 && (
-          <div
-            className="absolute flex flex-col items-center group cursor-default"
-            style={{ left: `${cliffPosition}%`, transform: 'translateX(-50%)' }}
-          >
-            <span className="uppercase tracking-wide text-blue-900 dark:text-blue-400">Cliff</span>
-            <span className="font-mono">{formatDateShort(cliffEnd)}</span>
-            <div className="absolute top-full mt-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-              {formatDateFull(cliffEnd)}
-            </div>
-          </div>
-        )}
 
         {/* End */}
         <div className="absolute right-0 flex flex-col items-end group cursor-default">

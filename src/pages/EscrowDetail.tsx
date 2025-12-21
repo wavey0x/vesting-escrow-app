@@ -1,16 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useAccount } from 'wagmi';
-import { isAddress } from 'viem';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { isAddress, Address as ViemAddress, maxUint256 } from 'viem';
 import Spinner from '../components/Spinner';
-import Address from '../components/Address';
+import AddressDisplay from '../components/Address';
 import TokenLogo from '../components/TokenLogo';
 import VestingTimeline from '../components/VestingTimeline';
 import StatusBadge from '../components/StatusBadge';
 import Button from '../components/Button';
 import RefreshIcon from '../components/RefreshIcon';
 import TokenAmount from '../components/TokenAmount';
-import ClaimButton from '../components/ClaimButton';
 import RevokeButton from '../components/RevokeButton';
 import DisownButton from '../components/DisownButton';
 import StarButton from '../components/StarButton';
@@ -35,6 +34,20 @@ import {
   isOwner,
   isRecipient,
 } from '../lib/escrow';
+import { getEtherscanTxUrl } from '../lib/constants';
+
+const escrowAbi = [
+  {
+    name: 'claim',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'beneficiary', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [{ name: '', type: 'uint256' }],
+  },
+] as const;
 
 export default function EscrowDetail() {
   const { address: escrowAddress } = useParams<{ address: string }>();
@@ -45,6 +58,7 @@ export default function EscrowDetail() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
+  const [showCliffAsDate, setShowCliffAsDate] = useState(false);
   const { getName, setName } = useEscrowNames();
   const { data: tokensIndex } = useTokens();
   const tokenMetadata = tokensIndex?.tokens[indexedEscrow?.token.toLowerCase() || ''];
@@ -114,8 +128,8 @@ export default function EscrowDetail() {
       <div className="flex items-start justify-between">
         <div>
           <Link to="/" className="inline-flex items-center text-secondary hover:text-primary mb-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 12H5M12 19l-7-7 7-7" />
+            <svg className="w-6 h-5" fill="none" stroke="currentColor" viewBox="0 0 28 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M27 12H3M10 19l-7-7 7-7" />
             </svg>
           </Link>
           <div className="flex items-center gap-3">
@@ -184,7 +198,7 @@ export default function EscrowDetail() {
                 <StatusBadge status={escrow.status} isLoading={loadingLive} />
               </div>
               <div className="flex items-center gap-1.5 mt-1">
-                <Address address={escrow.address} showCopy showLink={false} className="text-sm text-secondary" />
+                <AddressDisplay address={escrow.address} showCopy showLink={false} className="text-sm text-secondary" />
                 <a
                   href={`https://etherscan.io/address/${escrow.address}`}
                   target="_blank"
@@ -201,7 +215,6 @@ export default function EscrowDetail() {
           </div>
         </div>
         <div className="flex items-center">
-          <StarButton address={escrow.address} size={20} />
           <button
             onClick={() => {
               setIsRefreshing(true);
@@ -214,6 +227,7 @@ export default function EscrowDetail() {
           >
             <RefreshIcon size={18} spinning={isRefreshing} />
           </button>
+          <StarButton address={escrow.address} size={20} />
         </div>
       </div>
 
@@ -242,21 +256,15 @@ export default function EscrowDetail() {
 
       {/* Amounts */}
       <div className="grid md:grid-cols-3 gap-4">
-        <AmountCard
-          label="Claimable"
+        <ClaimableCard
           amount={amounts.claimable}
           decimals={decimals}
           value={formatValue(amounts.claimable)}
           isLoading={loadingLive}
-          action={showClaim ? (
-            <ClaimButton
-              escrowAddress={escrow.address}
-              unclaimed={amounts.claimable}
-              recipient={escrow.recipient}
-              onSuccess={() => refetch()}
-              compact
-            />
-          ) : undefined}
+          canClaim={showClaim}
+          escrowAddress={escrow.address}
+          recipient={escrow.recipient}
+          onSuccess={() => refetch()}
         />
         <AmountCard
           label="Claimed"
@@ -302,29 +310,29 @@ export default function EscrowDetail() {
         <h2 className="text-lg font-semibold text-primary mb-4">Details</h2>
         <div className="space-y-4">
           <DetailRow label="Escrow Address">
-            <Address address={escrow.address} />
+            <AddressDisplay address={escrow.address} />
           </DetailRow>
           <DetailRow label="Token">
             <div className="flex items-center gap-2">
-              <Address address={escrow.token} />
+              <AddressDisplay address={escrow.token} />
               <span className="text-secondary">({tokenMetadata?.symbol})</span>
             </div>
           </DetailRow>
           <DetailRow label="Recipient">
             <div className="flex items-center gap-2">
-              <Address address={escrow.recipient} />
+              <AddressDisplay address={escrow.recipient} />
               {userIsRecipient && (
                 <span className="text-xs bg-divider-subtle px-2 py-0.5 rounded">You</span>
               )}
             </div>
           </DetailRow>
           <DetailRow label="Funder">
-            <Address address={escrow.funder} />
+            <AddressDisplay address={escrow.funder} />
           </DetailRow>
           {liveData && (
             <DetailRow label="Owner">
               <div className="flex items-center gap-2">
-                <Address address={liveData.owner} />
+                <AddressDisplay address={liveData.owner} />
                 {userIsOwner && (
                   <span className="text-xs bg-divider-subtle px-2 py-0.5 rounded">You</span>
                 )}
@@ -334,11 +342,26 @@ export default function EscrowDetail() {
           <DetailRow label="Start Date">
             {formatDateTime(escrow.vestingStart)}
           </DetailRow>
+          <DetailRow label="End Date">
+            {formatDateTime(escrow.vestingStart + escrow.vestingDuration)}
+          </DetailRow>
           <DetailRow label="Duration">
             {formatDurationHuman(escrow.vestingDuration)}
           </DetailRow>
           <DetailRow label="Cliff">
-            {escrow.cliffLength > 0 ? formatDurationHuman(escrow.cliffLength) : 'None'}
+            {escrow.cliffLength > 0 ? (
+              <button
+                onClick={() => setShowCliffAsDate(!showCliffAsDate)}
+                className="text-primary hover:text-secondary transition-colors cursor-pointer"
+                title="Click to toggle format"
+              >
+                {showCliffAsDate
+                  ? formatDateTime(escrow.vestingStart + escrow.cliffLength)
+                  : formatDurationHuman(escrow.cliffLength)}
+              </button>
+            ) : (
+              'None'
+            )}
           </DetailRow>
           <DetailRow label="Open Claim">
             {escrow.openClaim ? 'True' : 'False'}
@@ -349,28 +372,156 @@ export default function EscrowDetail() {
   );
 }
 
+function ClaimableCard({
+  amount,
+  decimals,
+  value,
+  isLoading,
+  canClaim: isClaimable,
+  escrowAddress,
+  recipient,
+  onSuccess,
+}: {
+  amount: bigint;
+  decimals: number;
+  value: string | null;
+  isLoading?: boolean;
+  canClaim: boolean;
+  escrowAddress: string;
+  recipient: string;
+  onSuccess?: () => void;
+}) {
+  const { data: hash, isPending, writeContract, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+  const handleClaim = () => {
+    writeContract({
+      address: escrowAddress as ViemAddress,
+      abi: escrowAbi,
+      functionName: 'claim',
+      args: [recipient as ViemAddress, maxUint256],
+    });
+  };
+
+  // Handle success callback
+  useEffect(() => {
+    if (isSuccess && onSuccess) {
+      onSuccess();
+    }
+  }, [isSuccess, onSuccess]);
+
+  const isTxLoading = isPending || isConfirming;
+  const hasClaimableAmount = amount > 0n;
+  const canClick = isClaimable && hasClaimableAmount && !isTxLoading && !isSuccess;
+
+  // Render the card content (same structure for all states)
+  const renderCardContent = () => (
+    <>
+      <div className="text-sm text-secondary mb-1">
+        {isSuccess ? 'Claimed' : 'Claimable'}
+      </div>
+      {isLoading ? (
+        <div className="h-7 w-24 bg-divider-subtle rounded animate-pulse" />
+      ) : (
+        <TokenAmount value={amount} decimals={decimals} className="text-lg font-medium text-primary block" />
+      )}
+      {isLoading ? (
+        <div className="h-4 w-16 bg-divider-subtle rounded animate-pulse mt-1" />
+      ) : value ? (
+        <div className="text-sm text-tertiary">{value}</div>
+      ) : null}
+    </>
+  );
+
+  // Determine card styling based on state
+  const isActive = canClick || isTxLoading || isSuccess;
+  const cardClasses = `relative p-4 border rounded-lg ${
+    isActive
+      ? 'border-claimable/40' + (isTxLoading ? ' bg-claimable/5' : '')
+      : 'border-divider-strong'
+  }`;
+
+  // Success state - clickable link to etherscan
+  if (isSuccess && hash) {
+    return (
+      <a
+        href={getEtherscanTxUrl(hash)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`${cardClasses} bg-claimable/5 hover:bg-claimable/10 transition-colors block`}
+      >
+        <div className="absolute top-2 right-2">
+          <svg className="w-5 h-5 text-claimable" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        {renderCardContent()}
+      </a>
+    );
+  }
+
+  // Transaction loading state
+  if (isTxLoading) {
+    return (
+      <div className={cardClasses}>
+        <div className="absolute top-2 right-2">
+          <Spinner size="sm" />
+        </div>
+        {renderCardContent()}
+        <div className="absolute -top-6 left-0 right-0 text-xs text-primary text-center animate-pulse">
+          {isPending ? 'Confirm in wallet...' : 'Claiming...'}
+        </div>
+      </div>
+    );
+  }
+
+  // Claimable state - clickable card
+  if (canClick) {
+    return (
+      <button
+        onClick={handleClaim}
+        className={`${cardClasses} hover:bg-claimable/10 transition-colors text-left w-full`}
+      >
+        <div className="absolute top-2 right-2">
+          <span className="w-2.5 h-2.5 rounded-full animate-pulse bg-claimable block" />
+        </div>
+        {renderCardContent()}
+        {error && (
+          <div className="absolute -top-6 left-0 right-0 text-xs text-primary text-center">
+            {error.message.includes('User rejected') ? 'Rejected' : 'Failed'}
+            {' · '}
+            <span className="underline cursor-pointer" onClick={(e) => { e.stopPropagation(); reset(); }}>
+              Retry
+            </span>
+          </div>
+        )}
+      </button>
+    );
+  }
+
+  // Default state - not claimable
+  return (
+    <div className={cardClasses}>
+      {renderCardContent()}
+    </div>
+  );
+}
+
 function AmountCard({
   label,
   amount,
   decimals,
   value,
-  action,
   isLoading,
 }: {
   label: string;
   amount: bigint;
   decimals: number;
   value: string | null;
-  action?: React.ReactNode;
   isLoading?: boolean;
 }) {
   return (
     <div className="relative p-4 border rounded-lg border-divider-strong">
-      {action && (
-        <div className="absolute top-2 right-2">
-          {action}
-        </div>
-      )}
       <div className="text-sm text-secondary mb-1">{label}</div>
       {isLoading ? (
         <div className="h-7 w-24 bg-divider-subtle rounded animate-pulse" />

@@ -61,63 +61,61 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
   return (
     <Link
       to={`/view/${escrow.address}`}
-      className="relative block p-4 border border-divider-strong rounded-lg hover:border-primary transition-all duration-200"
+      className="relative block pt-2 px-4 pb-4 border border-divider-strong rounded-lg hover:border-primary transition-all duration-200"
     >
       {/* Star - snug in top-right corner */}
       <div className="absolute top-0.5 right-0.5">
         <StarButton address={escrow.address} size={16} />
       </div>
 
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <TokenLogo
-            address={escrow.token}
-            symbol={tokenMetadata?.symbol}
-            size={32}
+      {/* Name + Badge row */}
+      <div className="flex items-center gap-2 mb-2 pr-6">
+        {isEditing ? (
+          <input
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={handleNameSave}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.preventDefault()}
+            autoFocus
+            placeholder="Enter name..."
+            className="font-medium text-primary bg-transparent border-b border-primary outline-none w-32"
           />
-          <div>
-            <div className="flex items-center gap-2">
-              {isEditing ? (
-                <input
-                  type="text"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={handleNameSave}
-                  onKeyDown={handleKeyDown}
-                  onClick={(e) => e.preventDefault()}
-                  autoFocus
-                  placeholder="Enter name..."
-                  className="font-medium text-primary bg-transparent border-b border-primary outline-none w-32"
-                />
-              ) : customName ? (
-                <button
-                  onClick={handleNameClick}
-                  className="font-medium text-primary hover:text-secondary transition-colors text-left"
-                  title="Click to edit name"
-                >
-                  {customName}
-                </button>
-              ) : (
-                <button
-                  onClick={handleNameClick}
-                  className="text-tertiary hover:text-secondary transition-colors"
-                  title="Click to set name"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                  </svg>
-                </button>
-              )}
-              <StatusBadge status={fullEscrow.status} isLoading={isLoading} />
-            </div>
-            <div className="text-sm text-secondary">
-              <TokenAmount value={BigInt(escrow.amount)} decimals={tokenMetadata?.decimals || 18} /> {symbol}
-            </div>
-          </div>
-        </div>
-        {/* Address below star, right-aligned with content edge */}
-        <div className="flex flex-col items-end pt-3">
+        ) : customName ? (
+          <button
+            onClick={handleNameClick}
+            className="font-medium text-primary hover:text-secondary transition-colors text-left"
+            title="Click to edit name"
+          >
+            {customName}
+          </button>
+        ) : (
+          <button
+            onClick={handleNameClick}
+            className="text-tertiary hover:text-secondary transition-colors"
+            title="Click to set name"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+        )}
+        <StatusBadge status={fullEscrow.status} isLoading={isLoading} />
+      </div>
+
+      {/* Logo + Address/Amount row */}
+      <div className="flex items-center gap-3 mb-4">
+        <TokenLogo
+          address={escrow.token}
+          symbol={tokenMetadata?.symbol}
+          size={32}
+        />
+        <div>
           <Address address={escrow.address} showCopy className="text-sm text-secondary" />
+          <div className="text-sm text-secondary">
+            <TokenAmount value={BigInt(escrow.amount)} decimals={tokenMetadata?.decimals || 18} /> {symbol}
+          </div>
         </div>
       </div>
 
@@ -127,8 +125,10 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
 
       <div className="flex justify-between sm:justify-start sm:gap-24 text-sm">
         <div className="space-y-1">
-          <div>
-            <span className="text-tertiary">Recipient:</span>{' '}
+          <div className="flex items-center gap-1">
+            <svg className="w-3.5 h-3.5 text-tertiary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
             <Address address={escrow.recipient} showCopy showLink={false} className="text-secondary" />
           </div>
           <div>
