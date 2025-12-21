@@ -58,7 +58,7 @@ export default function EscrowDetail() {
         <p className="text-secondary mb-6">
           The provided address is not a valid Ethereum address.
         </p>
-        <Link to="/view">
+        <Link to="/">
           <Button variant="secondary">Back to View</Button>
         </Link>
       </div>
@@ -83,7 +83,7 @@ export default function EscrowDetail() {
           This escrow address was not found in our index. It may be a new escrow
           that hasn't been indexed yet, or an invalid address.
         </p>
-        <Link to="/view">
+        <Link to="/">
           <Button variant="secondary">Back to View</Button>
         </Link>
       </div>
@@ -114,7 +114,7 @@ export default function EscrowDetail() {
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Link to="/view" className="text-secondary hover:text-primary">
+            <Link to="/" className="text-secondary hover:text-primary">
               View
             </Link>
             <span className="text-tertiary">/</span>

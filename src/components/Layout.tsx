@@ -8,8 +8,8 @@ interface LayoutProps {
 }
 
 const navItems = [
+  { path: '/', label: 'View' },
   { path: '/create', label: 'Create' },
-  { path: '/view', label: 'View' },
 ];
 
 export default function Layout({ children }: LayoutProps) {
@@ -26,7 +26,7 @@ export default function Layout({ children }: LayoutProps) {
             <nav className="flex items-center gap-4 sm:gap-6">
               {navItems.map((item) => {
                 const isActive = location.pathname === item.path ||
-                  (item.path === '/view' && location.pathname.startsWith('/view/'));
+                  (item.path === '/' && location.pathname.startsWith('/view/'));
                 return (
                   <Link
                     key={item.path}
