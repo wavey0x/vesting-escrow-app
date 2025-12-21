@@ -3,7 +3,7 @@ import { mainnet } from 'wagmi/chains';
 import { walletConnect } from 'wagmi/connectors';
 
 const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '';
-const rpcUrl = import.meta.env.VITE_MAINNET_RPC || 'https://eth.llamarpc.com';
+const rpcUrl = import.meta.env.VITE_MAINNET_RPC || 'https://ethereum-rpc.publicnode.com';
 
 export const config = createConfig({
   chains: [mainnet],

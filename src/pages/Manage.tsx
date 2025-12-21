@@ -11,7 +11,16 @@ import { useBatchLiveEscrowData } from '../hooks/useBatchLiveEscrowData';
 import { useTokens } from '../hooks/useTokens';
 import { IndexedEscrow } from '../lib/types';
 
-type Tab = 'my-escrows' | 'starred' | 'search';
+type Tab = 'my-escrows' | 'starred' | 'search' | 'all';
+
+// Check if admin mode is enabled via localStorage
+const isAdmin = () => {
+  try {
+    return localStorage.getItem('admin') === 'true';
+  } catch {
+    return false;
+  }
+};
 
 export default function Manage() {
   const { address, isConnected } = useAccount();
@@ -32,18 +41,18 @@ export default function Manage() {
 
   // Update URL when hideCompleted changes
   const toggleHideCompleted = useCallback(() => {
-    setHideCompleted(prev => {
-      const newValue = !prev;
-      const newParams = new URLSearchParams(searchParams);
-      if (newValue) {
-        newParams.delete('hideCompleted'); // default is true, so omit from URL
-      } else {
-        newParams.set('hideCompleted', 'false');
-      }
-      setSearchParams(newParams);
-      return newValue;
-    });
-  }, [searchParams, setSearchParams]);
+    const newValue = !hideCompleted;
+    setHideCompleted(newValue);
+
+    // Update URL separately (not inside setState updater)
+    const newParams = new URLSearchParams(searchParams);
+    if (newValue) {
+      newParams.delete('hideCompleted'); // default is true, so omit from URL
+    } else {
+      newParams.set('hideCompleted', 'false');
+    }
+    setSearchParams(newParams);
+  }, [hideCompleted, searchParams, setSearchParams]);
 
   // Determine if escrow is completed based on time
   const isCompleted = useCallback((escrow: IndexedEscrow) => {
@@ -122,6 +131,11 @@ export default function Manage() {
       .filter((e): e is IndexedEscrow => e !== undefined);
   }, [starred, escrowsIndex]);
 
+  // Get all escrows for admin tab
+  const allEscrows = useMemo(() => {
+    return escrowsIndex?.escrows || [];
+  }, [escrowsIndex]);
+
   // Collect all escrow addresses that need live data based on active tab
   const escrowAddressesToFetch = useMemo(() => {
     const addresses: string[] = [];
@@ -132,10 +146,12 @@ export default function Manage() {
       addresses.push(...sortAndFilterEscrows(starredEscrows).map(e => e.address));
     } else if (activeTab === 'search' && searchResults) {
       addresses.push(...sortAndFilterEscrows(searchResults).map(e => e.address));
+    } else if (activeTab === 'all') {
+      addresses.push(...sortAndFilterEscrows(allEscrows).map(e => e.address));
     }
 
     return addresses;
-  }, [activeTab, myEscrows, starredEscrows, searchResults, sortAndFilterEscrows]);
+  }, [activeTab, myEscrows, starredEscrows, searchResults, allEscrows, sortAndFilterEscrows]);
 
   // Batch fetch live data for all visible escrows
   const { data: liveDataMap, isLoading: loadingLiveData } = useBatchLiveEscrowData(escrowAddressesToFetch);
@@ -227,6 +243,19 @@ export default function Manage() {
         </svg>
       ),
     },
+    // Admin-only tab
+    ...(isAdmin() ? [{
+      id: 'all' as Tab,
+      label: 'All',
+      icon: (
+        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="7" height="7" />
+          <rect x="14" y="3" width="7" height="7" />
+          <rect x="3" y="14" width="7" height="7" />
+          <rect x="14" y="14" width="7" height="7" />
+        </svg>
+      ),
+    }] : []),
   ];
 
   return (
@@ -254,6 +283,11 @@ export default function Manage() {
               {tab.id === 'starred' && starredEscrows.length > 0 && (
                 <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-divider-subtle rounded">
                   {starredEscrows.length}
+                </span>
+              )}
+              {tab.id === 'all' && allEscrows.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 text-xs bg-divider-subtle rounded">
+                  {allEscrows.length}
                 </span>
               )}
             </button>
@@ -421,6 +455,62 @@ export default function Manage() {
                   isLoadingLiveData={loadingLiveData}
                 />
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'all' && isAdmin() && (
+        <div className="min-h-[200px]">
+          {loadingIndex ? (
+            <div className="flex items-center justify-center py-12">
+              <Spinner size="lg" />
+            </div>
+          ) : allEscrows.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                  <span>Hide completed</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={hideCompleted}
+                    onClick={toggleHideCompleted}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white border border-divider-strong shadow-sm transition-transform`}
+                      style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
+                    />
+                  </button>
+                </label>
+                <span className="text-sm text-secondary">
+                  {sortAndFilterEscrows(allEscrows).length} escrow{sortAndFilterEscrows(allEscrows).length !== 1 ? 's' : ''}
+                  {hideCompleted && allEscrows.length !== sortAndFilterEscrows(allEscrows).length && (
+                    <span className="text-tertiary"> ({allEscrows.length - sortAndFilterEscrows(allEscrows).length} hidden)</span>
+                  )}
+                </span>
+              </div>
+              {sortAndFilterEscrows(allEscrows).map((escrow) => (
+                <EscrowCard
+                  key={escrow.address}
+                  escrow={escrow}
+                  tokenMetadata={tokensIndex?.tokens[escrow.token.toLowerCase()]}
+                  liveData={liveDataMap[escrow.address.toLowerCase()]}
+                  isLoadingLiveData={loadingLiveData}
+                />
+              ))}
+              {sortAndFilterEscrows(allEscrows).length === 0 && (
+                <div className="text-center py-8 text-secondary">
+                  No active escrows (completed hidden)
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-12 text-secondary">
+              No escrows found
             </div>
           )}
         </div>

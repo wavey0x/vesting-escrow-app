@@ -236,8 +236,8 @@ export default function EscrowDetail() {
 
       {/* Progress */}
       <div className="p-6 border border-divider-strong rounded-lg">
-        <div className="relative">
-          <span className="absolute right-0 -top-1 text-xs text-secondary">{progress.toFixed(1)}%</span>
+        <div className="flex justify-end mb-1">
+          <span className="text-xs text-secondary">{progress.toFixed(1)}%</span>
         </div>
         <VestingTimeline
           vestingStart={escrow.vestingStart}

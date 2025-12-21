@@ -49,23 +49,38 @@ export default function VestingTimeline({
     <div className="space-y-1">
       {/* Segmented progress bar */}
       <div className="relative h-4">
-        {/* Bar with overflow hidden for rounded corners */}
-        <div className="absolute inset-0 border border-divider-strong bg-background rounded-full overflow-hidden">
+        {/* Bar container with background - no border to allow fills to reach edges */}
+        <div className="absolute inset-0 bg-background rounded-full overflow-hidden ring-1 ring-inset ring-divider-strong">
           {/* Progress segment - grey fill (claimed or time progress during cliff) */}
           {greyPercent > 0 && (
             <div
-              className="absolute inset-y-0 left-0 bg-secondary"
-              style={{ width: `${greyPercent}%` }}
+              className={`absolute bg-secondary ${
+                greyPercent >= 99.5 && claimablePercent === 0 ? 'inset-0' : 'inset-y-0 left-0'
+              }`}
+              style={
+                greyPercent >= 99.5 && claimablePercent === 0
+                  ? undefined
+                  : { width: `${greyPercent}%` }
+              }
             />
           )}
 
           {/* Claimable segment - hatched pattern */}
           {claimablePercent > 0 && (
             <div
-              className="absolute inset-y-0"
+              className={`absolute ${
+                greyPercent + claimablePercent >= 99.5 && greyPercent === 0
+                  ? 'inset-0'
+                  : greyPercent + claimablePercent >= 99.5
+                    ? 'inset-y-0 right-0'
+                    : 'inset-y-0'
+              }`}
               style={{
-                left: `${greyPercent}%`,
-                width: `${claimablePercent}%`,
+                ...(greyPercent + claimablePercent >= 99.5 && greyPercent === 0
+                  ? {}
+                  : greyPercent + claimablePercent >= 99.5
+                    ? { left: `${greyPercent}%` }
+                    : { left: `${greyPercent}%`, width: `${claimablePercent}%` }),
                 background: `repeating-linear-gradient(
                   -45deg,
                   #888,
@@ -77,12 +92,12 @@ export default function VestingTimeline({
             />
           )}
 
-          {/* Current time marker - at end of colored segments */}
+          {/* Current time marker - at end of colored segments (hidden at/near 100%) */}
           {(() => {
             const coloredEnd = greyPercent + claimablePercent;
-            return coloredEnd > 0 && coloredEnd < 100 && (
+            return coloredEnd > 0 && coloredEnd < 99 && (
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-primary"
+                className="absolute top-0 bottom-0 w-px bg-primary"
                 style={{ left: `${coloredEnd}%`, transform: 'translateX(-50%)' }}
               />
             );

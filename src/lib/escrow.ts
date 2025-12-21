@@ -36,8 +36,8 @@ export function getEscrowStatus(escrow: Escrow): EscrowStatus {
     return 'disowned';
   }
 
-  // Check if completed (all claimed)
-  if (live.unclaimed === 0n && live.locked === 0n && live.totalClaimed > 0n) {
+  // Check if completed (nothing left to claim or locked)
+  if (live.unclaimed === 0n && live.locked === 0n) {
     return 'completed';
   }
 
