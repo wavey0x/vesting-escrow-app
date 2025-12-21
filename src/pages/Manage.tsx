@@ -86,12 +86,20 @@ export default function Manage() {
   const { data: escrowsIndex, isLoading: loadingIndex } = useEscrows();
   const { data: tokensIndex } = useTokens();
 
-  // Default to search tab if no wallet connected and no favorites
+  // Set default tab based on state:
+  // - If has stars: Starred (highest priority)
+  // - If wallet connected AND has escrows: My Escrows
+  // - Otherwise: Search
   useEffect(() => {
-    if (!searchParams.get('q') && !isConnected && starred.length === 0) {
+    if (searchParams.get('q')) return; // URL query takes precedence
+    if (starred.length > 0) {
+      setActiveTab('starred');
+    } else if (isConnected && myEscrows && myEscrows.length > 0) {
+      setActiveTab('my-escrows');
+    } else {
       setActiveTab('search');
     }
-  }, []);
+  }, [myEscrows]);
 
   // Get starred escrows from index
   const starredEscrows = useMemo(() => {
