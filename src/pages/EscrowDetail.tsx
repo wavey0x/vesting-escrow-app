@@ -27,7 +27,6 @@ import {
   mergeEscrowData,
   getVestingProgress,
   getAmountsBreakdown,
-  getTimeToMilestone,
   canClaim,
   canRevoke,
   canDisown,
@@ -107,7 +106,6 @@ export default function EscrowDetail() {
   const escrow = mergeEscrowData(indexedEscrow, liveData);
   const progress = getVestingProgress(escrow);
   const amounts = getAmountsBreakdown(escrow);
-  const milestone = getTimeToMilestone(escrow);
   const decimals = tokenMetadata?.decimals || 18;
 
   const formatValue = (amount: bigint) => {
@@ -235,14 +233,7 @@ export default function EscrowDetail() {
       <div className="p-6 border border-divider-strong rounded-lg">
         <div className="flex items-start justify-between mb-4">
           <span className="text-secondary">Vesting Progress</span>
-          <div className="text-right">
-            <span className="text-primary font-medium">{progress.toFixed(1)}%</span>
-            {milestone.milestone !== 'none' && (
-              <div className="text-xs text-tertiary mt-0.5">
-                {formatDurationHuman(milestone.seconds)} until {milestone.milestone === 'cliff' ? 'cliff' : 'vested'}
-              </div>
-            )}
-          </div>
+          <span className="text-primary font-medium">{progress.toFixed(1)}%</span>
         </div>
         <VestingTimeline
           vestingStart={escrow.vestingStart}

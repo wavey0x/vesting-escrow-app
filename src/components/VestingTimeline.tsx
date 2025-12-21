@@ -48,57 +48,59 @@ export default function VestingTimeline({
   return (
     <div className="space-y-1">
       {/* Segmented progress bar */}
-      <div className="relative h-4 border border-divider-strong bg-background rounded-full overflow-hidden">
-        {/* Progress segment - grey fill (claimed or time progress during cliff) */}
-        {greyPercent > 0 && (
-          <div
-            className="absolute inset-y-0 left-0 bg-secondary"
-            style={{ width: `${greyPercent}%` }}
-          />
-        )}
+      <div className="relative h-4">
+        {/* Bar with overflow hidden for rounded corners */}
+        <div className="absolute inset-0 border border-divider-strong bg-background rounded-full overflow-hidden">
+          {/* Progress segment - grey fill (claimed or time progress during cliff) */}
+          {greyPercent > 0 && (
+            <div
+              className="absolute inset-y-0 left-0 bg-secondary"
+              style={{ width: `${greyPercent}%` }}
+            />
+          )}
 
-        {/* Claimable segment - hatched pattern */}
-        {claimablePercent > 0 && (
-          <div
-            className="absolute inset-y-0"
-            style={{
-              left: `${greyPercent}%`,
-              width: `${claimablePercent}%`,
-              background: `repeating-linear-gradient(
-                -45deg,
-                #888,
-                #888 2px,
-                #bbb 2px,
-                #bbb 4px
-              )`,
-            }}
-          />
-        )}
+          {/* Claimable segment - hatched pattern */}
+          {claimablePercent > 0 && (
+            <div
+              className="absolute inset-y-0"
+              style={{
+                left: `${greyPercent}%`,
+                width: `${claimablePercent}%`,
+                background: `repeating-linear-gradient(
+                  -45deg,
+                  #888,
+                  #888 2px,
+                  #bbb 2px,
+                  #bbb 4px
+                )`,
+              }}
+            />
+          )}
 
-        {/* Cliff marker with tooltip */}
+          {/* Current time marker - at end of colored segments */}
+          {(() => {
+            const coloredEnd = greyPercent + claimablePercent;
+            return coloredEnd > 0 && coloredEnd < 100 && (
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-primary"
+                style={{ left: `${coloredEnd}%`, transform: 'translateX(-50%)' }}
+              />
+            );
+          })()}
+        </div>
+
+        {/* Cliff marker with tooltip - outside overflow-hidden */}
         {hasCliff && cliffPosition > 0 && cliffPosition < 100 && (
           <div
-            className="absolute top-0 bottom-0 w-3 -ml-1.5 group cursor-default flex justify-center"
+            className="absolute top-0 bottom-0 w-3 -ml-1.5 group cursor-default flex justify-center z-10"
             style={{ left: `${cliffPosition}%` }}
           >
             <div className="w-px h-full bg-amber-600 dark:bg-amber-400" />
-            <div className="absolute bottom-full mb-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+            <div className="absolute bottom-full mb-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               Cliff: {formatDateFull(cliffEnd)}
             </div>
           </div>
         )}
-
-        {/* Current time marker - at end of colored segments */}
-        {(() => {
-          const coloredEnd = greyPercent + claimablePercent;
-          return coloredEnd > 0 && coloredEnd < 100 && (
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-primary"
-              style={{ left: `${coloredEnd}%`, transform: 'translateX(-50%)' }}
-            />
-          );
-        })()}
-
       </div>
 
       {/* Date markers below the bar */}
