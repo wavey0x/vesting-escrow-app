@@ -1,7 +1,6 @@
 import { useAccount, useConnect, useDisconnect } from 'wagmi';
 import { formatAddress } from '../lib/format';
 import Button from './Button';
-import Spinner from './Spinner';
 
 export default function ConnectButton() {
   const { address, isConnected, isConnecting } = useAccount();
