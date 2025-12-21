@@ -428,7 +428,7 @@ function ClaimableCard({
   const isActive = canClick || isTxLoading || isSuccess;
   const cardClasses = `relative p-4 border rounded-lg ${
     isActive
-      ? 'border-claimable/40' + (isTxLoading ? ' bg-claimable/5' : '')
+      ? 'border-primary' + (isTxLoading ? ' bg-divider-subtle' : '')
       : 'border-divider-strong'
   }`;
 
