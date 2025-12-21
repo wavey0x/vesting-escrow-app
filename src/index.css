@@ -191,6 +191,26 @@
   }
 }
 
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-divider-subtle) 25%,
+    var(--color-divider-strong) 50%,
+    var(--color-divider-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
 @keyframes rotate-once {
   from {
     transform: rotate(0deg);

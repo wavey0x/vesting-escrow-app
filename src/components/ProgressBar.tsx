@@ -42,7 +42,7 @@ export default function ProgressBar({
       </div>
       {showLabel && (
         <span className="absolute right-0 -top-5 text-xs text-secondary">
-          {clampedProgress.toFixed(0)}%
+          {clampedProgress.toFixed(1)}%
         </span>
       )}
     </div>

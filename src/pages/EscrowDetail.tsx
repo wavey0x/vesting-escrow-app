@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { isAddress, Address as ViemAddress, maxUint256 } from 'viem';
 import Spinner from '../components/Spinner';
@@ -52,16 +52,9 @@ export default function EscrowDetail() {
   const { address: escrowAddress } = useParams<{ address: string }>();
   const { address: userAddress } = useAccount();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const handleBack = () => {
-    // If we navigated from within the app (state.fromApp), go back to previous page
-    // Otherwise (direct link), go to home which uses default tab priority
-    if (location.state?.fromApp) {
-      navigate(-1);
-    } else {
-      navigate('/');
-    }
+    navigate('/');
   };
 
   const { escrow: indexedEscrow, isLoading: loadingIndex } = useEscrowByAddress(escrowAddress);
@@ -243,9 +236,8 @@ export default function EscrowDetail() {
 
       {/* Progress */}
       <div className="p-6 border border-divider-strong rounded-lg">
-        <div className="flex items-start justify-between mb-4">
-          <span className="text-secondary">Vesting Progress</span>
-          <span className="text-primary font-medium">{progress.toFixed(1)}%</span>
+        <div className="relative">
+          <span className="absolute right-0 -top-1 text-xs text-secondary">{progress.toFixed(1)}%</span>
         </div>
         <VestingTimeline
           vestingStart={escrow.vestingStart}
@@ -424,12 +416,12 @@ function ClaimableCard({
         {isSuccess ? 'Claimed' : 'Claimable'}
       </div>
       {isLoading ? (
-        <div className="h-7 w-24 bg-divider-subtle rounded animate-pulse" />
+        <div className="h-7 w-24 skeleton rounded" />
       ) : (
         <TokenAmount value={amount} decimals={decimals} className="text-lg font-medium text-primary block" />
       )}
       {isLoading ? (
-        <div className="h-4 w-16 bg-divider-subtle rounded animate-pulse mt-1" />
+        <div className="h-4 w-16 skeleton rounded mt-1" />
       ) : value ? (
         <div className="text-sm text-tertiary">{value}</div>
       ) : null}
@@ -527,12 +519,12 @@ function AmountCard({
     <div className="relative p-4 border rounded-lg border-divider-strong">
       <div className="text-sm text-secondary mb-1">{label}</div>
       {isLoading ? (
-        <div className="h-7 w-24 bg-divider-subtle rounded animate-pulse" />
+        <div className="h-7 w-24 skeleton rounded" />
       ) : (
         <TokenAmount value={amount} decimals={decimals} className="text-lg font-medium text-primary block" />
       )}
       {isLoading ? (
-        <div className="h-4 w-16 bg-divider-subtle rounded animate-pulse mt-1" />
+        <div className="h-4 w-16 skeleton rounded mt-1" />
       ) : value ? (
         <div className="text-sm text-tertiary">{value}</div>
       ) : null}

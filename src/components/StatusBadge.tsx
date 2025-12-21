@@ -38,7 +38,7 @@ export default function StatusBadge({ status, className = '', isLoading = false 
   if (isLoading || !status) {
     return (
       <span
-        className={`inline-flex items-center justify-center min-w-[70px] px-2 py-0.5 text-xs font-medium rounded bg-divider-subtle animate-pulse ${className}`}
+        className={`inline-flex items-center justify-center min-w-[70px] px-2 py-0.5 text-xs font-medium rounded skeleton ${className}`}
       >
         <span className="invisible">Vesting</span>
       </span>

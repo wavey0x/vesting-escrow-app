@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { IndexedEscrow, TokenMetadata, LiveEscrowData } from '../lib/types';
-import { formatDate } from '../lib/format';
+import { formatDate, formatTokenAmount } from '../lib/format';
 import { getVestingProgress, mergeEscrowData } from '../lib/escrow';
 import Address from './Address';
 import TokenLogo from './TokenLogo';
@@ -11,6 +11,15 @@ import StatusBadge from './StatusBadge';
 import StarButton from './StarButton';
 import { useLiveEscrowData } from '../hooks/useLiveEscrowData';
 import { useEscrowNames } from '../contexts/EscrowNamesContext';
+
+// Format with intelligent decimals based on magnitude
+function formatSmartDecimals(value: bigint, decimals: number): string {
+  const num = Number(value) / 10 ** decimals;
+  if (num >= 1000) return formatTokenAmount(value, decimals, 0);
+  if (num >= 1) return formatTokenAmount(value, decimals, 2);
+  if (num >= 0.01) return formatTokenAmount(value, decimals, 4);
+  return formatTokenAmount(value, decimals, 6);
+}
 
 interface EscrowCardProps {
   escrow: IndexedEscrow;
@@ -34,6 +43,12 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
   const cliffPercent = escrow.cliffLength > 0
     ? (escrow.cliffLength / escrow.vestingDuration) * 100
     : undefined;
+
+  // Determine if we're in cliff period
+  const now = Math.floor(Date.now() / 1000);
+  const cliffEnd = escrow.vestingStart + escrow.cliffLength;
+  const inCliffPeriod = escrow.cliffLength > 0 && now < cliffEnd;
+  const decimals = tokenMetadata?.decimals || 18;
 
   const customName = getName(escrow.address);
   const symbol = tokenMetadata?.symbol || 'Token';
@@ -113,7 +128,7 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
           size={32}
         />
         <div>
-          <Address address={escrow.address} showCopy className="text-sm text-secondary" />
+          <Address address={escrow.address} showCopy showLink={false} className="text-sm text-secondary" />
           <div className="text-sm text-secondary">
             <TokenAmount value={BigInt(escrow.amount)} decimals={tokenMetadata?.decimals || 18} /> {symbol}
           </div>
@@ -132,14 +147,23 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
             </svg>
             <Address address={escrow.recipient} showCopy showLink={false} className="text-secondary" />
           </div>
-          <div>
-            <span className="text-tertiary">Cliff:</span>{' '}
-            <span className="text-secondary">
-              {escrow.cliffLength > 0
-                ? formatDate(escrow.vestingStart + escrow.cliffLength)
-                : 'None'}
-            </span>
-          </div>
+          {inCliffPeriod ? (
+            <div>
+              <span className="text-tertiary">Cliff:</span>{' '}
+              <span className="text-secondary">{formatDate(cliffEnd)}</span>
+            </div>
+          ) : (
+            <div>
+              <span className="text-tertiary">Claimable:</span>{' '}
+              {isLoading ? (
+                <span className="inline-block w-12 h-4 skeleton rounded align-middle" />
+              ) : (
+                <span className="text-secondary">
+                  {liveData?.unclaimed ? formatSmartDecimals(liveData.unclaimed, decimals) : '0'}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <div className="space-y-1 flex-shrink-0">
           <div className="whitespace-nowrap">
