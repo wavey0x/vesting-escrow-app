@@ -33,13 +33,16 @@ export default function ProgressBar({
                 )`,
           }}
         />
-        {hasCliff && (
-          <div
-            className="absolute top-0 bottom-0 w-0.5 bg-amber-600 dark:bg-amber-400"
-            style={{ left: `${cliffPercent}%` }}
-          />
-        )}
       </div>
+      {/* Cliff marker - outside overflow-hidden for dotted line to render */}
+      {hasCliff && (
+        <div
+          className="absolute top-0 bottom-0 flex justify-center"
+          style={{ left: `${cliffPercent}%` }}
+        >
+          <div className="h-full border-l border-dotted border-primary" />
+        </div>
+      )}
       {showLabel && (
         <span className="absolute right-0 -top-5 text-xs text-secondary">
           {clampedProgress.toFixed(1)}%

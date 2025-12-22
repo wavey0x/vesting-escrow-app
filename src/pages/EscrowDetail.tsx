@@ -142,6 +142,10 @@ export default function EscrowDetail() {
               size={32}
             />
             <div>
+              {/* Badge on top for mobile, inline for desktop */}
+              <div className="mb-1 sm:hidden">
+                <StatusBadge status={escrow.status} isLoading={loadingLive} />
+              </div>
               <div className="flex items-center gap-2">
                 {isEditingName ? (
                   <input
@@ -198,7 +202,9 @@ export default function EscrowDetail() {
                     )}
                   </>
                 )}
-                <StatusBadge status={escrow.status} isLoading={loadingLive} />
+                <span className="hidden sm:inline-flex">
+                  <StatusBadge status={escrow.status} isLoading={loadingLive} />
+                </span>
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <AddressDisplay address={escrow.address} showCopy showLink={false} className="text-sm text-secondary" />

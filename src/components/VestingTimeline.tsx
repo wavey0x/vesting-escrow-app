@@ -110,7 +110,7 @@ export default function VestingTimeline({
             className="absolute top-[1px] bottom-[1px] w-3 -ml-1.5 group cursor-default flex justify-center z-10"
             style={{ left: `${cliffPosition}%` }}
           >
-            <div className="w-px h-full bg-amber-600 dark:bg-amber-400" />
+            <div className="h-full border-l border-dashed border-primary" />
             <div className="absolute bottom-full mb-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               Cliff: {formatDateFull(cliffEnd)}
             </div>
@@ -119,10 +119,9 @@ export default function VestingTimeline({
       </div>
 
       {/* Date markers below the bar */}
-      <div className="relative h-8 text-[10px] text-tertiary">
+      <div className="relative h-4 text-[10px] text-tertiary">
         {/* Start */}
-        <div className="absolute left-0 flex flex-col group cursor-default">
-          <span className="uppercase tracking-wide">Start</span>
+        <div className="absolute left-0 group cursor-default">
           <span className="font-mono">{formatDateShort(vestingStart)}</span>
           <div className="absolute top-full left-0 mt-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
             {formatDateFull(vestingStart)}
@@ -130,8 +129,7 @@ export default function VestingTimeline({
         </div>
 
         {/* End */}
-        <div className="absolute right-0 flex flex-col items-end group cursor-default">
-          <span className="uppercase tracking-wide">End</span>
+        <div className="absolute right-0 group cursor-default">
           <span className="font-mono">{formatDateShort(vestingEnd)}</span>
           <div className="absolute top-full right-0 mt-1 px-2 py-1 bg-primary text-background text-[11px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
             {formatDateFull(vestingEnd)}

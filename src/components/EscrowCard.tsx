@@ -80,13 +80,14 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
       state={{ fromApp: true }}
       className="relative block pt-2 px-4 pb-4 border border-divider-strong rounded-lg hover:border-primary transition-all duration-200"
     >
-      {/* Star - snug in top-right corner */}
-      <div className="absolute top-0.5 right-0.5">
+      {/* Badge + Star - top-right corner */}
+      <div className="absolute top-1.5 right-1 flex items-center gap-1">
+        <StatusBadge status={fullEscrow.status} isLoading={isLoading} />
         <StarButton address={escrow.address} size={16} />
       </div>
 
-      {/* Name + Badge row */}
-      <div className="flex items-center gap-2 mb-2 pr-6">
+      {/* Name row */}
+      <div className="flex items-center gap-2 mb-2 pr-24">
         {isEditing ? (
           <input
             type="text"
@@ -118,7 +119,6 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
             </svg>
           </button>
         )}
-        <StatusBadge status={fullEscrow.status} isLoading={isLoading} />
       </div>
 
       {/* Logo + Address/Amount row */}
