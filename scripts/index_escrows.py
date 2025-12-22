@@ -48,6 +48,11 @@ LOGO_SOURCES = [
         "address_format": "checksum",
         "url_fn": lambda addr: f"https://raw.githubusercontent.com/Uniswap/assets/master/blockchains/ethereum/assets/{addr}/logo.png",
     },
+    {
+        "name": "stamp.fyi",
+        "address_format": "lowercase",
+        "url_fn": lambda addr: f"https://cdn.stamp.fyi/token/{addr}",
+    },
 ]
 
 
@@ -273,12 +278,15 @@ def update_token_metadata(w3: Web3, tokens_data: dict, new_tokens: list) -> dict
     updated = False
 
     # Migrate existing tokens: logoAvailable -> logoUrl
-    # Also re-check tokens that don't have SmolDapp URLs (prefer SmolDapp when available)
+    # Also re-check tokens that:
+    # - Have null logoUrl (might find logo in new sources)
+    # - Don't have SmolDapp URLs (prefer SmolDapp when available)
     tokens_to_migrate = [
         addr for addr, meta in tokens_data["tokens"].items()
-        if "logoAvailable" in meta or "logoUrl" not in meta or (
-            meta.get("logoUrl") and "smold" not in meta.get("logoUrl", "").lower()
-        )
+        if "logoAvailable" in meta
+        or "logoUrl" not in meta
+        or meta.get("logoUrl") is None  # Re-check tokens with no logo
+        or ("smold" not in (meta.get("logoUrl") or "").lower())  # Re-check non-SmolDapp
     ]
 
     if tokens_to_migrate:

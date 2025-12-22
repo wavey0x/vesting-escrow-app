@@ -29,6 +29,8 @@ export function getTokenLogoUrls(tokenAddress: string, size: 32 | 128 = 32): str
     `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/${checksumAddr}/logo.png`,
     // Uniswap - uses checksummed address
     `https://raw.githubusercontent.com/Uniswap/assets/master/blockchains/ethereum/assets/${checksumAddr}/logo.png`,
+    // stamp.fyi - aggregator, last resort
+    `https://cdn.stamp.fyi/token/${lowerAddr}`,
   ];
 }
 
