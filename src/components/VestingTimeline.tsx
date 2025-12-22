@@ -49,38 +49,32 @@ export default function VestingTimeline({
     <div className="space-y-1">
       {/* Segmented progress bar */}
       <div className="relative h-4">
-        {/* Bar container with background - no border to allow fills to reach edges */}
+        {/* Bar container with background */}
         <div className="absolute inset-0 bg-background rounded-full overflow-hidden ring-1 ring-inset ring-divider-strong">
           {/* Progress segment - grey fill (claimed or time progress during cliff) */}
           {greyPercent > 0 && (
             <div
-              className={`absolute bg-secondary ${
-                greyPercent >= 99.5 && claimablePercent === 0 ? 'inset-0' : 'inset-y-0 left-0'
-              }`}
+              className="absolute inset-y-0 left-0 bg-secondary"
               style={
-                greyPercent >= 99.5 && claimablePercent === 0
-                  ? undefined
-                  : { width: `${greyPercent}%` }
+                // Use right:0 instead of width:100% to ensure fill reaches rounded edge
+                // Use >= 99 threshold because percentages are integers (bigint division truncates)
+                greyPercent >= 99 && claimablePercent <= 1
+                  ? { right: 0 }
+                  : { width: `${Math.min(greyPercent, 100)}%` }
               }
             />
           )}
 
-          {/* Claimable segment - hatched pattern */}
-          {claimablePercent > 0 && (
+          {/* Claimable segment - hatched pattern (skip if < 1% due to integer truncation) */}
+          {claimablePercent >= 1 && (
             <div
-              className={`absolute ${
-                greyPercent + claimablePercent >= 99.5 && greyPercent === 0
-                  ? 'inset-0'
-                  : greyPercent + claimablePercent >= 99.5
-                    ? 'inset-y-0 right-0'
-                    : 'inset-y-0'
-              }`}
+              className="absolute inset-y-0"
               style={{
-                ...(greyPercent + claimablePercent >= 99.5 && greyPercent === 0
-                  ? {}
-                  : greyPercent + claimablePercent >= 99.5
-                    ? { left: `${greyPercent}%` }
-                    : { left: `${greyPercent}%`, width: `${claimablePercent}%` }),
+                left: `${greyPercent}%`,
+                // Use right:0 instead of width when claimable extends to end
+                ...(greyPercent + claimablePercent >= 99
+                  ? { right: 0 }
+                  : { width: `${Math.min(claimablePercent, 100 - greyPercent)}%` }),
                 background: `repeating-linear-gradient(
                   -45deg,
                   #888,
