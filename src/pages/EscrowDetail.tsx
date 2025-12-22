@@ -139,6 +139,7 @@ export default function EscrowDetail() {
             <TokenLogo
               address={escrow.token}
               symbol={tokenMetadata?.symbol}
+              logoUrl={tokenMetadata?.logoUrl}
               size={32}
             />
             <div>

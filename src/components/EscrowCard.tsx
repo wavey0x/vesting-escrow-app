@@ -126,6 +126,7 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
         <TokenLogo
           address={escrow.token}
           symbol={tokenMetadata?.symbol}
+          logoUrl={tokenMetadata?.logoUrl}
           size={32}
         />
         <div>

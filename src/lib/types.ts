@@ -18,7 +18,7 @@ export interface TokenMetadata {
   symbol: string;
   name: string;
   decimals: number;
-  logoAvailable: boolean;
+  logoUrl: string | null;
 }
 
 // Live escrow data from contract

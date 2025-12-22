@@ -1,3 +1,5 @@
+import { getAddress } from 'viem';
+
 // Chain configuration
 export const CHAIN_ID = 1;
 
@@ -13,6 +15,21 @@ export const TOKEN_LOGO_CDN = 'https://assets.smold.app/api/token';
 
 export function getTokenLogoUrl(tokenAddress: string, size: 32 | 128 = 32): string {
   return `${TOKEN_LOGO_CDN}/${CHAIN_ID}/${tokenAddress.toLowerCase()}/logo-${size}.png`;
+}
+
+// Fallback logo sources for when cached URL fails
+export function getTokenLogoUrls(tokenAddress: string, size: 32 | 128 = 32): string[] {
+  const lowerAddr = tokenAddress.toLowerCase();
+  const checksumAddr = getAddress(tokenAddress);
+
+  return [
+    // SmolDapp - supports size variants, uses lowercase
+    `${TOKEN_LOGO_CDN}/${CHAIN_ID}/${lowerAddr}/logo-${size}.png`,
+    // Trust Wallet - uses checksummed address
+    `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/${checksumAddr}/logo.png`,
+    // Uniswap - uses checksummed address
+    `https://raw.githubusercontent.com/Uniswap/assets/master/blockchains/ethereum/assets/${checksumAddr}/logo.png`,
+  ];
 }
 
 // DeFiLlama price API

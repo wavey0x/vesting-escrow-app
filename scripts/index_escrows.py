@@ -16,6 +16,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
 from web3 import Web3
 
 # Constants
@@ -23,6 +24,59 @@ FACTORY_ADDRESS = "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF"
 FACTORY_DEPLOY_BLOCK = 18_291_969
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 100_000))
 CHAIN_ID = 1
+
+# Logo CDN sources configuration
+# Each source is a dict with:
+#   - name: Human-readable name for logging
+#   - url_fn: Function that takes address and returns URL
+#   - address_format: 'lowercase' or 'checksum'
+#
+# To add a new source, append to this list:
+LOGO_SOURCES = [
+    {
+        "name": "SmolDapp",
+        "address_format": "lowercase",
+        "url_fn": lambda addr: f"https://assets.smold.app/api/token/1/{addr}/logo-128.png",
+    },
+    {
+        "name": "TrustWallet",
+        "address_format": "checksum",
+        "url_fn": lambda addr: f"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/{addr}/logo.png",
+    },
+    {
+        "name": "Uniswap",
+        "address_format": "checksum",
+        "url_fn": lambda addr: f"https://raw.githubusercontent.com/Uniswap/assets/master/blockchains/ethereum/assets/{addr}/logo.png",
+    },
+]
+
+
+def find_logo_url(token_address: str) -> tuple[str | None, str | None]:
+    """
+    Try each CDN source, return (first working URL, source name) or (None, None).
+
+    Handles address formatting per source (lowercase vs checksum).
+    Uses GET with stream=True to check availability without downloading full image.
+    """
+    for source in LOGO_SOURCES:
+        # Format address according to source requirements
+        if source["address_format"] == "checksum":
+            formatted_addr = Web3.to_checksum_address(token_address)
+        else:
+            formatted_addr = token_address.lower()
+
+        url = source["url_fn"](formatted_addr)
+        try:
+            # Use GET with stream to avoid downloading full image
+            # HEAD requests don't always work with GitHub redirects
+            resp = requests.get(url, timeout=5, allow_redirects=True, stream=True)
+            if resp.status_code == 200:
+                resp.close()  # Don't download the body
+                return url, source["name"]
+            resp.close()
+        except requests.RequestException:
+            continue
+    return None, None
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
@@ -119,7 +173,7 @@ def fetch_events(contract, from_block: int, to_block: int) -> list:
 
 
 def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
-    """Fetch ERC20 token metadata (symbol, name, decimals)."""
+    """Fetch ERC20 token metadata (symbol, name, decimals) and find working logo URL."""
     # Minimal ERC20 ABI for metadata
     erc20_abi = [
         {"constant": True, "inputs": [], "name": "symbol", "outputs": [{"type": "string"}], "type": "function"},
@@ -134,11 +188,14 @@ def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
         name = contract.functions.name().call()
         decimals = contract.functions.decimals().call()
 
+        # Find working logo URL from CDN sources
+        logo_url, _ = find_logo_url(token_address)
+
         return {
             "symbol": symbol,
             "name": name,
             "decimals": decimals,
-            "logoAvailable": True  # Assume available, frontend will fallback
+            "logoUrl": logo_url,
         }
     except Exception as e:
         print(f"  Warning: Could not fetch metadata for {token_address}: {e}")
@@ -146,7 +203,7 @@ def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
             "symbol": "???",
             "name": "Unknown Token",
             "decimals": 18,
-            "logoAvailable": False
+            "logoUrl": None,
         }
 
 
@@ -212,26 +269,53 @@ def index_escrows(w3: Web3, contract, data: dict) -> tuple[dict, list]:
 
 
 def update_token_metadata(w3: Web3, tokens_data: dict, new_tokens: list) -> dict:
-    """Fetch and update metadata for new tokens."""
-    if not new_tokens:
-        return tokens_data
+    """Fetch and update metadata for new tokens, and migrate existing tokens to new schema."""
+    updated = False
 
-    # Filter out tokens we already have
+    # Migrate existing tokens: logoAvailable -> logoUrl
+    # Also re-check tokens that don't have SmolDapp URLs (prefer SmolDapp when available)
+    tokens_to_migrate = [
+        addr for addr, meta in tokens_data["tokens"].items()
+        if "logoAvailable" in meta or "logoUrl" not in meta or (
+            meta.get("logoUrl") and "smold" not in meta.get("logoUrl", "").lower()
+        )
+    ]
+
+    if tokens_to_migrate:
+        print(f"\nMigrating {len(tokens_to_migrate)} tokens to new logo URL schema...")
+        for token_address in tokens_to_migrate:
+            existing = tokens_data["tokens"][token_address]
+            print(f"  {token_address} ({existing.get('symbol', '???')})...", end=" ", flush=True)
+            logo_url, source_name = find_logo_url(token_address)
+            # Update to new schema
+            tokens_data["tokens"][token_address] = {
+                "symbol": existing.get("symbol", "???"),
+                "name": existing.get("name", "Unknown Token"),
+                "decimals": existing.get("decimals", 18),
+                "logoUrl": logo_url,
+            }
+            if logo_url:
+                print(f"✓ ({source_name})")
+            else:
+                print("✗ (no logo found)")
+        updated = True
+
+    # Fetch metadata for new tokens
     tokens_to_fetch = [t for t in new_tokens if t not in tokens_data["tokens"]]
 
-    if not tokens_to_fetch:
+    if tokens_to_fetch:
+        print(f"\nFetching metadata for {len(tokens_to_fetch)} new tokens...")
+        for token_address in tokens_to_fetch:
+            print(f"  {token_address}...", end=" ", flush=True)
+            metadata = fetch_token_metadata(w3, token_address)
+            tokens_data["tokens"][token_address] = metadata
+            print(f"{metadata['symbol']}" + (f" ✓" if metadata["logoUrl"] else " ✗"))
+        updated = True
+
+    if updated:
+        tokens_data["lastUpdated"] = datetime.now(timezone.utc).isoformat()
+    elif not new_tokens:
         print("No new tokens to fetch metadata for")
-        return tokens_data
-
-    print(f"\nFetching metadata for {len(tokens_to_fetch)} new tokens...")
-
-    for token_address in tokens_to_fetch:
-        print(f"  {token_address}...", end=" ", flush=True)
-        metadata = fetch_token_metadata(w3, token_address)
-        tokens_data["tokens"][token_address] = metadata
-        print(f"{metadata['symbol']}")
-
-    tokens_data["lastUpdated"] = datetime.now(timezone.utc).isoformat()
 
     return tokens_data
 
