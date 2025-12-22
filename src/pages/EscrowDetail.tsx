@@ -130,11 +130,18 @@ export default function EscrowDetail() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <button onClick={handleBack} className="inline-flex items-center justify-center px-1.5 py-0.5 border border-divider-strong rounded text-secondary hover:text-primary hover:border-primary transition-colors mb-2">
-            <svg className="w-5 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 12H4M9 19l-7-7 7-7" />
-            </svg>
-          </button>
+          {/* Top row: back button (in logo-width container) + badge - aligns badge with title */}
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-8 flex-shrink-0">
+              <button onClick={handleBack} className="inline-flex items-center justify-center px-1.5 py-0.5 border border-divider-strong rounded text-secondary hover:text-primary hover:border-primary transition-colors">
+                <svg className="w-5 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M22 12H4M9 19l-7-7 7-7" />
+                </svg>
+              </button>
+            </div>
+            <StatusBadge status={escrow.status} isLoading={loadingLive} />
+          </div>
+          {/* Logo + title row */}
           <div className="flex items-center gap-3">
             <TokenLogo
               address={escrow.token}
@@ -143,10 +150,6 @@ export default function EscrowDetail() {
               size={32}
             />
             <div>
-              {/* Badge on top for mobile, inline for desktop */}
-              <div className="mb-1 sm:hidden">
-                <StatusBadge status={escrow.status} isLoading={loadingLive} />
-              </div>
               <div className="flex items-center gap-2">
                 {isEditingName ? (
                   <input
@@ -203,9 +206,6 @@ export default function EscrowDetail() {
                     )}
                   </>
                 )}
-                <span className="hidden sm:inline-flex">
-                  <StatusBadge status={escrow.status} isLoading={loadingLive} />
-                </span>
               </div>
               <div className="flex items-center gap-1.5 mt-1">
                 <AddressDisplay address={escrow.address} showCopy showLink={false} className="text-sm text-secondary" />
