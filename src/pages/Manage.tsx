@@ -32,12 +32,10 @@ export default function Manage() {
   });
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [searchError, setSearchError] = useState('');
-  const [searchResults, setSearchResults] = useState<IndexedEscrow[] | null>(null);
   const [hideCompleted, setHideCompleted] = useState(() => {
     const param = searchParams.get('hideCompleted');
     return param === null ? true : param !== 'false';
   });
-  const [pendingSearch, setPendingSearch] = useState(() => !!searchParams.get('q'));
   const [hideFullyClaimed, setHideFullyClaimed] = useState(true); // Admin-only: hide escrows with 0 claimable
 
   // Update URL when hideCompleted changes
@@ -137,6 +135,48 @@ export default function Manage() {
     return escrowsIndex?.escrows || [];
   }, [escrowsIndex]);
 
+  // Derive search results from URL query - this survives back navigation
+  const urlQuery = searchParams.get('q')?.trim() || '';
+  const searchResults = useMemo(() => {
+    if (!urlQuery || !escrowsIndex?.escrows) return null;
+    if (!isAddress(urlQuery)) return null;
+
+    // Check if it's a recipient address
+    const recipientEscrows = escrowsIndex.escrows
+      .filter((e) => e.recipient.toLowerCase() === urlQuery.toLowerCase())
+      .sort((a, b) => b.blockNumber - a.blockNumber);
+
+    return recipientEscrows.length > 0 ? recipientEscrows : null;
+  }, [urlQuery, escrowsIndex]);
+
+  // If URL query matches an exact escrow address, navigate to it
+  useEffect(() => {
+    if (!urlQuery || !escrowsIndex?.escrows) return;
+    if (!isAddress(urlQuery)) return;
+
+    const escrow = escrowsIndex.escrows.find(
+      (e) => e.address.toLowerCase() === urlQuery.toLowerCase()
+    );
+
+    if (escrow) {
+      navigate(`/vest/${urlQuery}`, { replace: true, state: { fromApp: true } });
+    }
+  }, [urlQuery, escrowsIndex, navigate]);
+
+  // Derive search error from URL query
+  const derivedSearchError = useMemo(() => {
+    if (!urlQuery) return '';
+    if (!isAddress(urlQuery)) return 'Invalid Ethereum address';
+    if (escrowsIndex?.escrows && !searchResults) {
+      // Check if it's not an escrow address either
+      const isEscrowAddress = escrowsIndex.escrows.some(
+        (e) => e.address.toLowerCase() === urlQuery.toLowerCase()
+      );
+      if (!isEscrowAddress) return 'No escrows found for this address';
+    }
+    return '';
+  }, [urlQuery, escrowsIndex, searchResults]);
+
   // Collect all escrow addresses that need live data based on active tab
   const escrowAddressesToFetch = useMemo(() => {
     const addresses: string[] = [];
@@ -157,14 +197,15 @@ export default function Manage() {
   // Batch fetch live data for all visible escrows
   const { data: liveDataMap, isLoading: loadingLiveData } = useBatchLiveEscrowData(escrowAddressesToFetch);
 
-  const performSearch = useCallback((query: string, updateUrl = true) => {
+  // Search just updates the URL - results are derived from URL query
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
     setSearchError('');
-    setSearchResults(null);
+    const trimmedQuery = searchQuery.trim();
 
-    const trimmedQuery = query.trim();
     if (!trimmedQuery) {
       setSearchError('Please enter an address');
-      if (updateUrl) setSearchParams({});
+      setSearchParams({});
       return;
     }
 
@@ -173,46 +214,8 @@ export default function Manage() {
       return;
     }
 
-    // Update URL with search query
-    if (updateUrl) {
-      setSearchParams({ q: trimmedQuery });
-    }
-
-    // Check if it's an escrow address
-    const escrow = escrowsIndex?.escrows.find(
-      (e) => e.address.toLowerCase() === trimmedQuery.toLowerCase()
-    );
-
-    if (escrow) {
-      navigate(`/vest/${trimmedQuery}`, { state: { fromApp: true } });
-      return;
-    }
-
-    // Check if it's a recipient address
-    const recipientEscrows = escrowsIndex?.escrows
-      .filter((e) => e.recipient.toLowerCase() === trimmedQuery.toLowerCase())
-      .sort((a, b) => b.blockNumber - a.blockNumber) || [];
-
-    if (recipientEscrows.length > 0) {
-      setSearchResults(recipientEscrows);
-      return;
-    }
-
-    // No results found
-    setSearchError('No escrows found for this address');
-  }, [escrowsIndex, navigate, setSearchParams]);
-
-  // Auto-search from URL when escrowsIndex loads
-  useEffect(() => {
-    if (pendingSearch && escrowsIndex && !loadingIndex) {
-      performSearch(searchQuery, false);
-      setPendingSearch(false);
-    }
-  }, [pendingSearch, escrowsIndex, loadingIndex, searchQuery, performSearch]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    performSearch(searchQuery);
+    // Update URL - the derived searchResults will update automatically
+    setSearchParams({ q: trimmedQuery });
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -432,8 +435,8 @@ export default function Manage() {
                 </button>
               </label>
               <div>
-                {searchError && (
-                  <p className="text-sm text-red-600 dark:text-red-400">{searchError}</p>
+                {(searchError || derivedSearchError) && (
+                  <p className="text-sm text-red-600 dark:text-red-400">{searchError || derivedSearchError}</p>
                 )}
               </div>
             </div>

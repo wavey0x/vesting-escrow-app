@@ -6,7 +6,9 @@
       "WebFetch(domain:assets.smold.app)",
       "WebFetch(domain:defillama.com)",
       "WebSearch",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)"
     ]
   }
 }
