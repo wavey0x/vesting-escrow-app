@@ -29,13 +29,6 @@ export function getEscrowStatus(escrow: Escrow): EscrowStatus {
     return 'revoked';
   }
 
-  // Check if disowned (owner is zero but not revoked)
-  if (live.owner === ZERO_ADDRESS && disabledAt >= endTime) {
-    // Only mark as disowned if it was actually disowned
-    // This is a permanent state where owner gave up control
-    return 'disowned';
-  }
-
   // Check if completed (nothing left to claim or locked)
   // Use Number() to handle both bigint 0n and number 0 from different RPC responses
   if (Number(live.unclaimed) === 0 && Number(live.locked) === 0) {

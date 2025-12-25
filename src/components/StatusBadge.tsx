@@ -27,10 +27,6 @@ const statusConfig: Record<EscrowStatus, { label: string; className: string }> =
     label: 'Revoked',
     className: 'bg-red-100 text-red-700 ring-1 ring-red-200 dark:bg-red-900/40 dark:text-red-300 dark:ring-red-800',
   },
-  disowned: {
-    label: 'Disowned',
-    className: 'bg-divider-subtle text-secondary ring-1 ring-divider-strong',
-  },
 };
 
 export default function StatusBadge({ status, className = '', isLoading = false }: StatusBadgeProps) {

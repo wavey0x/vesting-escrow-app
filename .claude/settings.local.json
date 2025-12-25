@@ -5,7 +5,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:assets.smold.app)",
       "WebFetch(domain:defillama.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npm run build:*)"
     ]
   }
 }

@@ -48,8 +48,7 @@ export type EscrowStatus =
   | 'vesting'
   | 'claimable'
   | 'completed'
-  | 'revoked'
-  | 'disowned';
+  | 'revoked';
 
 // Price data
 export interface TokenPrice {
