@@ -1,6 +1,7 @@
 // Escrow data from index
 export interface IndexedEscrow {
   address: string;
+  factory?: string;
   funder: string;
   token: string;
   recipient: string;
@@ -57,13 +58,17 @@ export interface TokenPrice {
   timestamp: number;
 }
 
+// Per-factory metadata in the index
+export interface FactoryMeta {
+  deployBlock: number;
+  lastBlock: number;
+}
+
 // Index files schema
 export interface EscrowsIndex {
   lastIndexed: string;
-  lastBlock: number;
   chainId: number;
-  factory: string;
-  factoryDeployBlock: number;
+  factories: Record<string, FactoryMeta>;
   escrows: IndexedEscrow[];
 }
 

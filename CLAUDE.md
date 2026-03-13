@@ -3,7 +3,10 @@
 ## Contracts
 
 ### VestingEscrowFactory
-**Address**: `0x200C92Dd85730872Ab6A1e7d5E40A067066257cF`
+**Addresses** (same ABI, both indexed):
+- `0x200C92Dd85730872Ab6A1e7d5E40A067066257cF` (deploy block: 18,291,969) — used for new deployments
+- `0xcf61782465Ff973638143d6492B51A85986aB347` (deploy block: 19,739,664)
+
 **Chain**: Ethereum Mainnet (chainId: 1)
 
 Deploys individual vesting escrows using EIP-1167 minimal proxies.
@@ -82,7 +85,7 @@ VestingEscrowCreated(address,address,address,address,uint256,uint256,uint256,uin
 0x99fd02dbc65944923f77d3e5d3e77e8c4c1b4026201be5445a8e827183e993e2
 ```
 
-**Factory Deploy Block**: 18,291,969
+**Factory Deploy Blocks**: 18,291,969 (`0x200C...`) and 19,739,664 (`0xcf61...`)
 
 ---
 

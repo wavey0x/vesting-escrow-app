@@ -2,7 +2,7 @@
 """
 Vesting Escrow Indexer
 
-Scans the VestingEscrowFactory contract for VestingEscrowCreated events
+Scans VestingEscrowFactory contracts for VestingEscrowCreated events
 and builds a JSON index of all escrows.
 
 Usage:
@@ -20,8 +20,10 @@ import requests
 from web3 import Web3
 
 # Constants
-FACTORY_ADDRESS = "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF"
-FACTORY_DEPLOY_BLOCK = 18_291_969
+FACTORIES = [
+    {"address": "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF", "deployBlock": 18_291_969},
+    {"address": "0xcf61782465Ff973638143d6492B51A85986aB347", "deployBlock": 19_739_664},
+]
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 100_000))
 CHAIN_ID = 1
 
@@ -116,25 +118,43 @@ def get_web3() -> Web3:
     return w3
 
 
-def get_factory_contract(w3: Web3):
-    """Get the factory contract instance."""
-    abi = load_factory_abi()
-    return w3.eth.contract(address=FACTORY_ADDRESS, abi=abi)
-
-
 def load_existing_data() -> dict:
-    """Load existing escrows.json or return empty structure."""
+    """Load existing escrows.json or return empty structure. Migrates old single-factory format."""
     if ESCROWS_FILE.exists():
         with open(ESCROWS_FILE) as f:
-            return json.load(f)
+            data = json.load(f)
+
+        # Migrate from old single-factory format
+        if "factory" in data and isinstance(data["factory"], str):
+            old_factory = data.pop("factory")
+            old_last_block = data.pop("lastBlock", 0)
+            data.pop("factoryDeployBlock", None)
+            data["factories"] = {
+                old_factory: {"deployBlock": FACTORIES[0]["deployBlock"], "lastBlock": old_last_block}
+            }
+            # Tag existing escrows with the original factory
+            for escrow in data["escrows"]:
+                if "factory" not in escrow:
+                    escrow["factory"] = old_factory
+
+        # Ensure all configured factories are present
+        for factory in FACTORIES:
+            if factory["address"] not in data.get("factories", {}):
+                data.setdefault("factories", {})[factory["address"]] = {
+                    "deployBlock": factory["deployBlock"],
+                    "lastBlock": factory["deployBlock"] - 1,
+                }
+
+        return data
 
     return {
         "lastIndexed": None,
-        "lastBlock": FACTORY_DEPLOY_BLOCK - 1,
         "chainId": CHAIN_ID,
-        "factory": FACTORY_ADDRESS,
-        "factoryDeployBlock": FACTORY_DEPLOY_BLOCK,
-        "escrows": []
+        "factories": {
+            f["address"]: {"deployBlock": f["deployBlock"], "lastBlock": f["deployBlock"] - 1}
+            for f in FACTORIES
+        },
+        "escrows": [],
     }
 
 
@@ -150,11 +170,12 @@ def load_existing_tokens() -> dict:
     }
 
 
-def event_to_escrow(event) -> dict:
+def event_to_escrow(event, factory_address: str) -> dict:
     """Convert a web3.py event object to our escrow format."""
     args = event["args"]
     return {
         "address": args["escrow"],
+        "factory": factory_address,
         "funder": args["funder"],
         "token": args["token"].lower(),  # lowercase for consistency
         "recipient": args["recipient"],
@@ -168,13 +189,13 @@ def event_to_escrow(event) -> dict:
     }
 
 
-def fetch_events(contract, from_block: int, to_block: int) -> list:
+def fetch_events(contract, from_block: int, to_block: int, factory_address: str) -> list:
     """Fetch VestingEscrowCreated events using contract interface."""
     events = contract.events.VestingEscrowCreated.get_logs(
         from_block=from_block,
         to_block=to_block
     )
-    return [event_to_escrow(e) for e in events]
+    return [event_to_escrow(e, factory_address) for e in events]
 
 
 def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
@@ -212,22 +233,22 @@ def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
         }
 
 
-def index_escrows(w3: Web3, contract, data: dict) -> tuple[dict, list]:
+def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_block: int) -> list:
     """
-    Index new escrows from the blockchain.
-    Returns updated data and list of new token addresses.
+    Index new escrows from a single factory.
+    Returns list of new token addresses found.
     """
-    start_block = data["lastBlock"] + 1
-    current_block = w3.eth.block_number
+    factory_meta = data["factories"][factory_address]
+    start_block = factory_meta["lastBlock"] + 1
 
     if start_block >= current_block:
-        print("No new blocks to scan")
-        return data, []
+        print("  No new blocks to scan")
+        return []
 
     total_blocks = current_block - start_block
     num_chunks = (total_blocks + CHUNK_SIZE - 1) // CHUNK_SIZE
 
-    print(f"Scanning blocks {start_block:,} to {current_block:,} ({total_blocks:,} blocks, {num_chunks} chunks)")
+    print(f"  Scanning blocks {start_block:,} to {current_block:,} ({total_blocks:,} blocks, {num_chunks} chunks)")
 
     # Build set of existing escrow addresses for deduplication
     existing_addresses = {e["address"] for e in data["escrows"]}
@@ -238,19 +259,19 @@ def index_escrows(w3: Web3, contract, data: dict) -> tuple[dict, list]:
         chunk_start = start_block + (i * CHUNK_SIZE)
         chunk_end = min(chunk_start + CHUNK_SIZE - 1, current_block)
 
-        print(f"  Chunk {i + 1}/{num_chunks}: blocks {chunk_start:,} to {chunk_end:,}...", end=" ", flush=True)
+        print(f"    Chunk {i + 1}/{num_chunks}: blocks {chunk_start:,} to {chunk_end:,}...", end=" ", flush=True)
 
         retries = 3
         for attempt in range(retries):
             try:
-                events = fetch_events(contract, chunk_start, chunk_end)
+                events = fetch_events(contract, chunk_start, chunk_end, factory_address)
                 break
             except Exception as e:
                 if attempt < retries - 1:
-                    print(f"\n    Retry {attempt + 1}/{retries} after error: {e}")
+                    print(f"\n      Retry {attempt + 1}/{retries} after error: {e}")
                     time.sleep(2 ** attempt)  # Exponential backoff
                 else:
-                    print(f"\n    Failed after {retries} attempts: {e}")
+                    print(f"\n      Failed after {retries} attempts: {e}")
                     raise
 
         # Filter out duplicates and collect new escrows
@@ -264,13 +285,11 @@ def index_escrows(w3: Web3, contract, data: dict) -> tuple[dict, list]:
 
     # Append new escrows to data
     data["escrows"].extend(new_escrows)
-    data["lastBlock"] = current_block
-    data["lastIndexed"] = datetime.now(timezone.utc).isoformat()
+    factory_meta["lastBlock"] = current_block
 
-    print(f"\nTotal new escrows: {len(new_escrows)}")
-    print(f"Total escrows: {len(data['escrows'])}")
+    print(f"  New escrows from this factory: {len(new_escrows)}")
 
-    return data, list(new_tokens)
+    return list(new_tokens)
 
 
 def update_token_metadata(w3: Web3, tokens_data: dict, new_tokens: list) -> dict:
@@ -348,19 +367,32 @@ def main():
 
     # Initialize
     w3 = get_web3()
-    contract = get_factory_contract(w3)
+    abi = load_factory_abi()
     data = load_existing_data()
     tokens_data = load_existing_tokens()
 
-    print(f"\nFactory: {FACTORY_ADDRESS}")
-    print(f"Last indexed block: {data['lastBlock']:,}")
+    print(f"\nFactories: {len(FACTORIES)}")
+    for f in FACTORIES:
+        meta = data["factories"][f["address"]]
+        print(f"  {f['address']}: last block {meta['lastBlock']:,}")
     print(f"Existing escrows: {len(data['escrows'])}")
 
-    # Index new escrows
-    data, new_tokens = index_escrows(w3, contract, data)
+    all_new_tokens = []
+    current_block = w3.eth.block_number
+
+    for factory in FACTORIES:
+        addr = factory["address"]
+        print(f"\nIndexing factory {addr}...")
+        contract = w3.eth.contract(address=addr, abi=abi)
+        new_tokens = index_factory(w3, contract, data, addr, current_block)
+        all_new_tokens.extend(new_tokens)
+
+    data["lastIndexed"] = datetime.now(timezone.utc).isoformat()
+
+    print(f"\nTotal escrows: {len(data['escrows'])}")
 
     # Update token metadata
-    tokens_data = update_token_metadata(w3, tokens_data, new_tokens)
+    tokens_data = update_token_metadata(w3, tokens_data, all_new_tokens)
 
     # Save results
     save_data(data, tokens_data)
