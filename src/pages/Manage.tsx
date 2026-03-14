@@ -87,8 +87,8 @@ export default function Manage() {
   const sortAndFilterEscrows = useCallback((escrows: IndexedEscrow[] | undefined) => {
     if (!escrows) return [];
 
-    // Filter if hideCompleted is enabled (skip in admin mode — status filter handles it)
-    const filtered = (hideCompleted && !isAdmin())
+    // Filter if hideCompleted is enabled
+    const filtered = hideCompleted
       ? escrows.filter(e => isActive(e))
       : escrows;
 
@@ -215,7 +215,7 @@ export default function Manage() {
   const { data: liveDataMap, isLoading: loadingLiveData } = useBatchLiveEscrowData(escrowAddressesToFetch);
 
   const filterByStatus = useCallback((escrows: IndexedEscrow[]) => {
-    if (!isAdmin() || selectedStatuses.size === ALL_STATUSES.length) return escrows;
+    if (selectedStatuses.size === ALL_STATUSES.length) return escrows;
     return escrows.filter(escrow => {
       const merged = mergeEscrowData(escrow, liveDataMap[escrow.address.toLowerCase()]);
       const status = getEscrowStatus(merged);
@@ -339,31 +339,27 @@ export default function Manage() {
           ) : myEscrows && myEscrows.length > 0 ? (
             <div className="space-y-4">
               <div className="flex items-center justify-start">
-                {isAdmin() ? (
-                  <StatusFilter selectedStatuses={selectedStatuses} onToggle={toggleStatus} />
-                ) : (
-                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
-                    <span>Hide completed</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={hideCompleted}
-                      onClick={toggleHideCompleted}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                  <span>Hide completed</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={hideCompleted}
+                    onClick={toggleHideCompleted}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white border border-divider-strong shadow-sm transition-transform ${
+                        hideCompleted ? 'translate-x-4.5' : 'translate-x-1'
                       }`}
-                    >
-                      <span
-                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white border border-divider-strong shadow-sm transition-transform ${
-                          hideCompleted ? 'translate-x-4.5' : 'translate-x-1'
-                        }`}
-                        style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
-                      />
-                    </button>
-                  </label>
-                )}
+                      style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
+                    />
+                  </button>
+                </label>
               </div>
-              {filterByStatus(sortAndFilterEscrows(myEscrows)).map((escrow) => (
+              {sortAndFilterEscrows(myEscrows).map((escrow) => (
                 <EscrowCard
                   key={escrow.address}
                   escrow={escrow}
@@ -372,9 +368,9 @@ export default function Manage() {
                   isLoadingLiveData={loadingLiveData}
                 />
               ))}
-              {filterByStatus(sortAndFilterEscrows(myEscrows)).length === 0 && (
+              {sortAndFilterEscrows(myEscrows).length === 0 && (
                 <div className="text-center py-8 text-secondary">
-                  {isAdmin() ? 'No escrows match selected filters' : 'No active escrows (completed hidden)'}
+                  No active escrows (completed hidden)
                 </div>
               )}
             </div>
@@ -391,29 +387,25 @@ export default function Manage() {
           {starredEscrows.length > 0 ? (
             <div className="space-y-4">
               <div className="flex items-center justify-start">
-                {isAdmin() ? (
-                  <StatusFilter selectedStatuses={selectedStatuses} onToggle={toggleStatus} />
-                ) : (
-                  <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
-                    <span>Hide completed</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={hideCompleted}
-                      onClick={toggleHideCompleted}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white border border-divider-strong shadow-sm transition-transform`}
-                        style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
-                      />
-                    </button>
-                  </label>
-                )}
+                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                  <span>Hide completed</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={hideCompleted}
+                    onClick={toggleHideCompleted}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white border border-divider-strong shadow-sm transition-transform`}
+                      style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
+                    />
+                  </button>
+                </label>
               </div>
-              {filterByStatus(sortAndFilterEscrows(starredEscrows)).map((escrow) => (
+              {sortAndFilterEscrows(starredEscrows).map((escrow) => (
                 <EscrowCard
                   key={escrow.address}
                   escrow={escrow}
@@ -422,9 +414,9 @@ export default function Manage() {
                   isLoadingLiveData={loadingLiveData}
                 />
               ))}
-              {filterByStatus(sortAndFilterEscrows(starredEscrows)).length === 0 && (
+              {sortAndFilterEscrows(starredEscrows).length === 0 && (
                 <div className="text-center py-8 text-secondary">
-                  {isAdmin() ? 'No escrows match selected filters' : 'No active escrows (completed hidden)'}
+                  No active escrows (completed hidden)
                 </div>
               )}
             </div>
@@ -451,27 +443,23 @@ export default function Manage() {
               <Button type="submit">Search</Button>
             </div>
             <div className="flex items-center justify-between">
-              {isAdmin() ? (
-                <StatusFilter selectedStatuses={selectedStatuses} onToggle={toggleStatus} />
-              ) : (
-                <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
-                  <span>Hide completed</span>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={hideCompleted}
-                    onClick={toggleHideCompleted}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform`}
-                      style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
-                    />
-                  </button>
-                </label>
-              )}
+              <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
+                <span>Hide completed</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={hideCompleted}
+                  onClick={toggleHideCompleted}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform`}
+                    style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
+                  />
+                </button>
+              </label>
               <div>
                 {(searchError || derivedSearchError) && (
                   <p className="text-sm text-red-600 dark:text-red-400">{searchError || derivedSearchError}</p>
@@ -483,12 +471,12 @@ export default function Manage() {
           {searchResults && searchResults.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm text-secondary">
-                Found {filterByStatus(sortAndFilterEscrows(searchResults)).length} escrow{filterByStatus(sortAndFilterEscrows(searchResults)).length !== 1 ? 's' : ''} for this recipient
-                {!isAdmin() && hideCompleted && searchResults.length !== sortAndFilterEscrows(searchResults).length && (
+                Found {sortAndFilterEscrows(searchResults).length} escrow{sortAndFilterEscrows(searchResults).length !== 1 ? 's' : ''} for this recipient
+                {hideCompleted && searchResults.length !== sortAndFilterEscrows(searchResults).length && (
                   <span className="text-tertiary"> ({searchResults.length - sortAndFilterEscrows(searchResults).length} completed hidden)</span>
                 )}
               </p>
-              {filterByStatus(sortAndFilterEscrows(searchResults)).map((escrow) => (
+              {sortAndFilterEscrows(searchResults).map((escrow) => (
                 <EscrowCard
                   key={escrow.address}
                   escrow={escrow}
