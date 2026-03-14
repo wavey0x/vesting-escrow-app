@@ -81,30 +81,26 @@ export default function Manage() {
     return !isCompleted(escrow);
   }, [isCompleted]);
 
-  // Sort and filter escrows consistently:
-  // 1. Active escrows (cliff/vesting) first, then completed
-  // 2. Within each group, sort by start time descending (newest first)
+  // Sort escrows: active first, then by start time descending (newest first)
+  const sortEscrows = useCallback((escrows: IndexedEscrow[] | undefined) => {
+    if (!escrows) return [];
+    return [...escrows].sort((a, b) => {
+      const aActive = isActive(a);
+      const bActive = isActive(b);
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+      return b.vestingStart - a.vestingStart;
+    });
+  }, [isActive]);
+
+  // Sort and filter escrows (used on non-admin tabs with hideCompleted toggle)
   const sortAndFilterEscrows = useCallback((escrows: IndexedEscrow[] | undefined) => {
     if (!escrows) return [];
-
-    // Filter if hideCompleted is enabled
     const filtered = hideCompleted
       ? escrows.filter(e => isActive(e))
       : escrows;
-
-    // Sort: active first, then by start time descending
-    return [...filtered].sort((a, b) => {
-      const aActive = isActive(a);
-      const bActive = isActive(b);
-
-      // Active escrows come first
-      if (aActive && !bActive) return -1;
-      if (!aActive && bActive) return 1;
-
-      // Within same group, sort by start time descending (newest first)
-      return b.vestingStart - a.vestingStart;
-    });
-  }, [hideCompleted, isActive]);
+    return sortEscrows(filtered);
+  }, [hideCompleted, isActive, sortEscrows]);
 
   const { escrows: myEscrows, isLoading: loadingEscrows } = useEscrowsByAddress(address);
   const { starred } = useStarredEscrows();
@@ -205,11 +201,11 @@ export default function Manage() {
     } else if (activeTab === 'search' && searchResults) {
       addresses.push(...sortAndFilterEscrows(searchResults).map(e => e.address));
     } else if (activeTab === 'all') {
-      addresses.push(...sortAndFilterEscrows(allEscrows).map(e => e.address));
+      addresses.push(...sortEscrows(allEscrows).map(e => e.address));
     }
 
     return addresses;
-  }, [activeTab, myEscrows, starredEscrows, searchResults, allEscrows, sortAndFilterEscrows]);
+  }, [activeTab, myEscrows, starredEscrows, searchResults, allEscrows, sortAndFilterEscrows, sortEscrows]);
 
   // Batch fetch live data for all visible escrows
   const { data: liveDataMap, isLoading: loadingLiveData } = useBatchLiveEscrowData(escrowAddressesToFetch);
@@ -518,7 +514,7 @@ export default function Manage() {
                   </button>
                 </label>
               </div>
-              {filterByStatus(sortAndFilterEscrows(allEscrows))
+              {filterByStatus(sortEscrows(allEscrows))
                 .filter(escrow => {
                   if (!hideFullyClaimed) return true;
                   const live = liveDataMap[escrow.address.toLowerCase()];
@@ -534,7 +530,7 @@ export default function Manage() {
                   isLoadingLiveData={loadingLiveData}
                 />
               ))}
-              {filterByStatus(sortAndFilterEscrows(allEscrows)).filter(escrow => {
+              {filterByStatus(sortEscrows(allEscrows)).filter(escrow => {
                 if (!hideFullyClaimed) return true;
                 const live = liveDataMap[escrow.address.toLowerCase()];
                 if (!live) return true;
