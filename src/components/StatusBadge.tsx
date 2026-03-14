@@ -6,7 +6,7 @@ interface StatusBadgeProps {
   isLoading?: boolean;
 }
 
-const statusConfig: Record<EscrowStatus, { label: string; className: string }> = {
+export const statusConfig: Record<EscrowStatus, { label: string; className: string }> = {
   cliff: {
     label: 'Pre Cliff',
     className: 'bg-amber-100 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:ring-amber-800',

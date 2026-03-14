@@ -6,9 +6,10 @@ Scans VestingEscrowFactory contracts for VestingEscrowCreated events
 and builds a JSON index of all escrows.
 
 Usage:
-    MAINNET_RPC=https://... python scripts/index_escrows.py
+    MAINNET_RPC=https://... python scripts/index_escrows.py [--refresh-logos]
 """
 
+import argparse
 import json
 import os
 import sys
@@ -26,6 +27,8 @@ FACTORIES = [
 ]
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 100_000))
 CHAIN_ID = 1
+
+PREFERRED_LOGO_DOMAIN = "smold"  # Substring matched against logoUrl to identify preferred source
 
 # Logo CDN sources configuration
 # Each source is a dict with:
@@ -58,6 +61,9 @@ LOGO_SOURCES = [
 ]
 
 
+_http_session = requests.Session()
+
+
 def find_logo_url(token_address: str) -> tuple[str | None, str | None]:
     """
     Try each CDN source, return (first working URL, source name) or (None, None).
@@ -65,18 +71,16 @@ def find_logo_url(token_address: str) -> tuple[str | None, str | None]:
     Handles address formatting per source (lowercase vs checksum).
     Uses GET with stream=True to check availability without downloading full image.
     """
-    for source in LOGO_SOURCES:
-        # Format address according to source requirements
-        if source["address_format"] == "checksum":
-            formatted_addr = Web3.to_checksum_address(token_address)
-        else:
-            formatted_addr = token_address.lower()
+    checksum_addr = Web3.to_checksum_address(token_address)
+    lower_addr = token_address.lower()
 
+    for source in LOGO_SOURCES:
+        formatted_addr = checksum_addr if source["address_format"] == "checksum" else lower_addr
         url = source["url_fn"](formatted_addr)
         try:
             # Use GET with stream to avoid downloading full image
             # HEAD requests don't always work with GitHub redirects
-            resp = requests.get(url, timeout=5, allow_redirects=True, stream=True)
+            resp = _http_session.get(url, timeout=5, allow_redirects=True, stream=True)
             if resp.status_code == 200:
                 resp.close()  # Don't download the body
                 return url, source["name"]
@@ -120,54 +124,54 @@ def get_web3() -> Web3:
 
 def load_existing_data() -> dict:
     """Load existing escrows.json or return empty structure. Migrates old single-factory format."""
-    if ESCROWS_FILE.exists():
+    try:
         with open(ESCROWS_FILE) as f:
             data = json.load(f)
+    except FileNotFoundError:
+        return {
+            "lastIndexed": None,
+            "chainId": CHAIN_ID,
+            "factories": {
+                f["address"]: {"deployBlock": f["deployBlock"], "lastBlock": f["deployBlock"] - 1}
+                for f in FACTORIES
+            },
+            "escrows": [],
+        }
 
-        # Migrate from old single-factory format
-        if "factory" in data and isinstance(data["factory"], str):
-            old_factory = data.pop("factory")
-            old_last_block = data.pop("lastBlock", 0)
-            data.pop("factoryDeployBlock", None)
-            data["factories"] = {
-                old_factory: {"deployBlock": FACTORIES[0]["deployBlock"], "lastBlock": old_last_block}
+    # Migrate from old single-factory format
+    if "factory" in data and isinstance(data["factory"], str):
+        old_factory = data.pop("factory")
+        old_last_block = data.pop("lastBlock", 0)
+        data.pop("factoryDeployBlock", None)
+        data["factories"] = {
+            old_factory: {"deployBlock": FACTORIES[0]["deployBlock"], "lastBlock": old_last_block}
+        }
+        # Tag existing escrows with the original factory
+        for escrow in data["escrows"]:
+            if "factory" not in escrow:
+                escrow["factory"] = old_factory
+
+    # Ensure all configured factories are present
+    for factory in FACTORIES:
+        if factory["address"] not in data.get("factories", {}):
+            data.setdefault("factories", {})[factory["address"]] = {
+                "deployBlock": factory["deployBlock"],
+                "lastBlock": factory["deployBlock"] - 1,
             }
-            # Tag existing escrows with the original factory
-            for escrow in data["escrows"]:
-                if "factory" not in escrow:
-                    escrow["factory"] = old_factory
 
-        # Ensure all configured factories are present
-        for factory in FACTORIES:
-            if factory["address"] not in data.get("factories", {}):
-                data.setdefault("factories", {})[factory["address"]] = {
-                    "deployBlock": factory["deployBlock"],
-                    "lastBlock": factory["deployBlock"] - 1,
-                }
-
-        return data
-
-    return {
-        "lastIndexed": None,
-        "chainId": CHAIN_ID,
-        "factories": {
-            f["address"]: {"deployBlock": f["deployBlock"], "lastBlock": f["deployBlock"] - 1}
-            for f in FACTORIES
-        },
-        "escrows": [],
-    }
+    return data
 
 
 def load_existing_tokens() -> dict:
     """Load existing tokens.json or return empty structure."""
-    if TOKENS_FILE.exists():
+    try:
         with open(TOKENS_FILE) as f:
             return json.load(f)
-
-    return {
-        "lastUpdated": None,
-        "tokens": {}
-    }
+    except FileNotFoundError:
+        return {
+            "lastUpdated": None,
+            "tokens": {}
+        }
 
 
 def event_to_escrow(event, factory_address: str) -> dict:
@@ -198,17 +202,25 @@ def fetch_events(contract, from_block: int, to_block: int, factory_address: str)
     return [event_to_escrow(e, factory_address) for e in events]
 
 
+DEFAULT_TOKEN_METADATA = {
+    "symbol": "???",
+    "name": "Unknown Token",
+    "decimals": 18,
+    "logoUrl": None,
+}
+
+# Minimal ERC20 ABI for metadata
+ERC20_ABI = [
+    {"constant": True, "inputs": [], "name": "symbol", "outputs": [{"type": "string"}], "type": "function"},
+    {"constant": True, "inputs": [], "name": "name", "outputs": [{"type": "string"}], "type": "function"},
+    {"constant": True, "inputs": [], "name": "decimals", "outputs": [{"type": "uint8"}], "type": "function"},
+]
+
+
 def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
     """Fetch ERC20 token metadata (symbol, name, decimals) and find working logo URL."""
-    # Minimal ERC20 ABI for metadata
-    erc20_abi = [
-        {"constant": True, "inputs": [], "name": "symbol", "outputs": [{"type": "string"}], "type": "function"},
-        {"constant": True, "inputs": [], "name": "name", "outputs": [{"type": "string"}], "type": "function"},
-        {"constant": True, "inputs": [], "name": "decimals", "outputs": [{"type": "uint8"}], "type": "function"},
-    ]
-
     try:
-        contract = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=erc20_abi)
+        contract = w3.eth.contract(address=Web3.to_checksum_address(token_address), abi=ERC20_ABI)
 
         symbol = contract.functions.symbol().call()
         name = contract.functions.name().call()
@@ -225,33 +237,27 @@ def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
         }
     except Exception as e:
         print(f"  Warning: Could not fetch metadata for {token_address}: {e}")
-        return {
-            "symbol": "???",
-            "name": "Unknown Token",
-            "decimals": 18,
-            "logoUrl": None,
-        }
+        return dict(DEFAULT_TOKEN_METADATA)
 
 
-def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_block: int) -> list:
+def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_block: int, existing_addresses: set) -> set:
     """
     Index new escrows from a single factory.
-    Returns list of new token addresses found.
+    Returns set of new token addresses found.
+    Updates existing_addresses in place as new escrows are added.
     """
     factory_meta = data["factories"][factory_address]
     start_block = factory_meta["lastBlock"] + 1
 
     if start_block >= current_block:
         print("  No new blocks to scan")
-        return []
+        return set()
 
     total_blocks = current_block - start_block
     num_chunks = (total_blocks + CHUNK_SIZE - 1) // CHUNK_SIZE
 
     print(f"  Scanning blocks {start_block:,} to {current_block:,} ({total_blocks:,} blocks, {num_chunks} chunks)")
 
-    # Build set of existing escrow addresses for deduplication
-    existing_addresses = {e["address"] for e in data["escrows"]}
     new_escrows = []
     new_tokens = set()
 
@@ -289,23 +295,23 @@ def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_
 
     print(f"  New escrows from this factory: {len(new_escrows)}")
 
-    return list(new_tokens)
+    return new_tokens
 
 
-def update_token_metadata(w3: Web3, tokens_data: dict, new_tokens: list) -> dict:
+def update_token_metadata(w3: Web3, tokens_data: dict, new_tokens: set, refresh_logos: bool = False) -> dict:
     """Fetch and update metadata for new tokens, and migrate existing tokens to new schema."""
     updated = False
 
-    # Migrate existing tokens: logoAvailable -> logoUrl
-    # Also re-check tokens that:
-    # - Have null logoUrl (might find logo in new sources)
-    # - Don't have SmolDapp URLs (prefer SmolDapp when available)
+    # Always: migrate old schema (logoAvailable) and fix missing logoUrl key
+    # With --refresh-logos (daily CI): also retry null logos and upgrade non-preferred sources
     tokens_to_migrate = [
         addr for addr, meta in tokens_data["tokens"].items()
         if "logoAvailable" in meta
         or "logoUrl" not in meta
-        or meta.get("logoUrl") is None  # Re-check tokens with no logo
-        or ("smold" not in (meta.get("logoUrl") or "").lower())  # Re-check non-SmolDapp
+        or (refresh_logos and (
+            meta.get("logoUrl") is None
+            or PREFERRED_LOGO_DOMAIN not in (meta.get("logoUrl") or "").lower()
+        ))
     ]
 
     if tokens_to_migrate:
@@ -316,9 +322,9 @@ def update_token_metadata(w3: Web3, tokens_data: dict, new_tokens: list) -> dict
             logo_url, source_name = find_logo_url(token_address)
             # Update to new schema
             tokens_data["tokens"][token_address] = {
-                "symbol": existing.get("symbol", "???"),
-                "name": existing.get("name", "Unknown Token"),
-                "decimals": existing.get("decimals", 18),
+                "symbol": existing.get("symbol", DEFAULT_TOKEN_METADATA["symbol"]),
+                "name": existing.get("name", DEFAULT_TOKEN_METADATA["name"]),
+                "decimals": existing.get("decimals", DEFAULT_TOKEN_METADATA["decimals"]),
                 "logoUrl": logo_url,
             }
             if logo_url:
@@ -361,6 +367,11 @@ def save_data(data: dict, tokens_data: dict):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Vesting Escrow Indexer")
+    parser.add_argument("--refresh-logos", action="store_true",
+                        help="Re-check all token logos against CDN sources")
+    args = parser.parse_args()
+
     print("=" * 60)
     print("Vesting Escrow Indexer")
     print("=" * 60)
@@ -377,22 +388,23 @@ def main():
         print(f"  {f['address']}: last block {meta['lastBlock']:,}")
     print(f"Existing escrows: {len(data['escrows'])}")
 
-    all_new_tokens = []
+    all_new_tokens = set()
+    existing_addresses = {e["address"] for e in data["escrows"]}
     current_block = w3.eth.block_number
 
     for factory in FACTORIES:
         addr = factory["address"]
         print(f"\nIndexing factory {addr}...")
         contract = w3.eth.contract(address=addr, abi=abi)
-        new_tokens = index_factory(w3, contract, data, addr, current_block)
-        all_new_tokens.extend(new_tokens)
+        new_tokens = index_factory(w3, contract, data, addr, current_block, existing_addresses)
+        all_new_tokens.update(new_tokens)
 
     data["lastIndexed"] = datetime.now(timezone.utc).isoformat()
 
     print(f"\nTotal escrows: {len(data['escrows'])}")
 
     # Update token metadata
-    tokens_data = update_token_metadata(w3, tokens_data, all_new_tokens)
+    tokens_data = update_token_metadata(w3, tokens_data, all_new_tokens, refresh_logos=args.refresh_logos)
 
     # Save results
     save_data(data, tokens_data)
