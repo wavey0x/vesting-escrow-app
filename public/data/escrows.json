@@ -1,5 +1,5 @@
 {
-  "lastIndexed": "2026-03-28T01:27:48.302029+00:00",
+  "lastIndexed": "2026-03-29T01:50:02.955516+00:00",
   "chainId": 1,
   "escrows": [
     {
@@ -8630,11 +8630,11 @@
   "factories": {
     "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF": {
       "deployBlock": 18291969,
-      "lastBlock": 24752772
+      "lastBlock": 24760065
     },
     "0xcf61782465Ff973638143d6492B51A85986aB347": {
       "deployBlock": 19739664,
-      "lastBlock": 24752772
+      "lastBlock": 24760065
     }
   }
 }
