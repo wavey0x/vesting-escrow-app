@@ -22,7 +22,6 @@ import {
   formatUSD,
   formatDateTime,
   formatDurationHuman,
-  formatRelativeTime,
 } from '../lib/format';
 import {
   mergeEscrowData,
@@ -48,6 +47,22 @@ const escrowAbi = [
     outputs: [{ name: '', type: 'uint256' }],
   },
 ] as const;
+
+function formatDaysUntil(timestamp: number, now: number): string {
+  const targetDate = new Date(timestamp * 1000);
+  const currentDate = new Date(now * 1000);
+
+  targetDate.setHours(0, 0, 0, 0);
+  currentDate.setHours(0, 0, 0, 0);
+
+  const dayDiff = Math.round((targetDate.getTime() - currentDate.getTime()) / 86_400_000);
+
+  if (dayDiff <= 0) {
+    return 'today';
+  }
+
+  return `in ${dayDiff} ${dayDiff === 1 ? 'day' : 'days'}`;
+}
 
 export default function EscrowDetail() {
   const { address: escrowAddress } = useParams<{ address: string }>();
@@ -139,7 +154,7 @@ export default function EscrowDetail() {
     ? formatDateTime(cliffEnd)
     : now >= cliffEnd
       ? 'Reached'
-      : formatRelativeTime(cliffEnd);
+      : formatDaysUntil(cliffEnd, now);
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
