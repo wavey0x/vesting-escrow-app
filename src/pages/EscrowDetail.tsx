@@ -22,6 +22,7 @@ import {
   formatUSD,
   formatDateTime,
   formatDurationHuman,
+  formatRelativeTime,
 } from '../lib/format';
 import {
   mergeEscrowData,
@@ -63,10 +64,19 @@ export default function EscrowDetail() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
   const [showCliffAsDate, setShowCliffAsDate] = useState(false);
+  const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const { getName, setName } = useEscrowNames();
   const { data: tokensIndex } = useTokens();
   const tokenMetadata = tokensIndex?.tokens[indexedEscrow?.token.toLowerCase() || ''];
   const tokenPrice = useTokenPrice(indexedEscrow?.token);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNow(Math.floor(Date.now() / 1000));
+    }, 60_000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   // Validate address
   if (!escrowAddress || !isAddress(escrowAddress)) {
@@ -124,6 +134,12 @@ export default function EscrowDetail() {
   const showDisown = canDisown(escrow, userAddress);
   const userIsOwner = isOwner(escrow, userAddress);
   const userIsRecipient = isRecipient(escrow, userAddress);
+  const cliffEnd = escrow.vestingStart + escrow.cliffLength;
+  const cliffDisplay = showCliffAsDate
+    ? formatDateTime(cliffEnd)
+    : now >= cliffEnd
+      ? 'Reached'
+      : formatRelativeTime(cliffEnd);
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
@@ -355,11 +371,9 @@ export default function EscrowDetail() {
               <button
                 onClick={() => setShowCliffAsDate(!showCliffAsDate)}
                 className="text-primary hover:text-secondary transition-colors cursor-pointer"
-                title="Click to toggle format"
+                title={showCliffAsDate ? 'Click to show relative time' : 'Click to show absolute date'}
               >
-                {showCliffAsDate
-                  ? formatDateTime(escrow.vestingStart + escrow.cliffLength)
-                  : formatDurationHuman(escrow.cliffLength)}
+                {cliffDisplay}
               </button>
             ) : (
               'None'
