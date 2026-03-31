@@ -58,10 +58,29 @@ function formatDaysUntil(timestamp: number, now: number): string {
   const dayDiff = Math.round((targetDate.getTime() - currentDate.getTime()) / 86_400_000);
 
   if (dayDiff <= 0) {
-    return 'today';
+    return 'Today';
   }
 
   return `in ${dayDiff} ${dayDiff === 1 ? 'day' : 'days'}`;
+}
+
+function formatLocalIsoDate(timestamp: number): string {
+  const date = new Date(timestamp * 1000);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatDurationDays(seconds: number): string {
+  const days = seconds / 86_400;
+
+  if (Number.isInteger(days)) {
+    return `${days} ${days === 1 ? 'day' : 'days'}`;
+  }
+
+  return `${days.toFixed(1).replace(/\.0$/, '')} days`;
 }
 
 export default function EscrowDetail() {
@@ -78,7 +97,7 @@ export default function EscrowDetail() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
-  const [showCliffAsDate, setShowCliffAsDate] = useState(false);
+  const [showCliffDuration, setShowCliffDuration] = useState(false);
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const { getName, setName } = useEscrowNames();
   const { data: tokensIndex } = useTokens();
@@ -86,12 +105,15 @@ export default function EscrowDetail() {
   const tokenPrice = useTokenPrice(indexedEscrow?.token);
 
   useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setNow(Math.floor(Date.now() / 1000));
-    }, 60_000);
+    const nextMidnight = new Date();
+    nextMidnight.setHours(24, 0, 0, 0);
 
-    return () => window.clearInterval(intervalId);
-  }, []);
+    const timeoutId = window.setTimeout(() => {
+      setNow(Math.floor(Date.now() / 1000));
+    }, nextMidnight.getTime() - Date.now() + 1_000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [now]);
 
   // Validate address
   if (!escrowAddress || !isAddress(escrowAddress)) {
@@ -150,11 +172,10 @@ export default function EscrowDetail() {
   const userIsOwner = isOwner(escrow, userAddress);
   const userIsRecipient = isRecipient(escrow, userAddress);
   const cliffEnd = escrow.vestingStart + escrow.cliffLength;
-  const cliffDisplay = showCliffAsDate
-    ? formatDateTime(cliffEnd)
-    : now >= cliffEnd
-      ? 'Reached'
-      : formatDaysUntil(cliffEnd, now);
+  const cliffLabel = showCliffDuration ? 'Cliff Duration' : 'Cliff Date';
+  const cliffDisplay = showCliffDuration
+    ? formatDurationDays(escrow.cliffLength)
+    : `${now >= cliffEnd ? 'Reached' : formatDaysUntil(cliffEnd, now)} / ${formatLocalIsoDate(cliffEnd)}`;
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
@@ -381,12 +402,12 @@ export default function EscrowDetail() {
           <DetailRow label="Duration">
             {formatDurationHuman(escrow.vestingDuration)}
           </DetailRow>
-          <DetailRow label="Cliff">
+          <DetailRow label={escrow.cliffLength > 0 ? cliffLabel : 'Cliff'}>
             {escrow.cliffLength > 0 ? (
               <button
-                onClick={() => setShowCliffAsDate(!showCliffAsDate)}
+                onClick={() => setShowCliffDuration(!showCliffDuration)}
                 className="text-primary hover:text-secondary transition-colors cursor-pointer"
-                title={showCliffAsDate ? 'Click to show relative time' : 'Click to show absolute date'}
+                title={showCliffDuration ? 'Click to show cliff date' : 'Click to show cliff duration'}
               >
                 {cliffDisplay}
               </button>
