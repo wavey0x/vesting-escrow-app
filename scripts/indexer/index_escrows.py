@@ -6,7 +6,7 @@ Scans VestingEscrowFactory contracts for VestingEscrowCreated events
 and builds a JSON index of all escrows.
 
 Usage:
-    MAINNET_RPC=https://... python scripts/index_escrows.py [--refresh-logos]
+    MAINNET_RPC=https://... python scripts/indexer/index_escrows.py [--refresh-logos]
 """
 
 import argparse
@@ -90,10 +90,10 @@ def find_logo_url(token_address: str) -> tuple[str | None, str | None]:
     return None, None
 
 # Paths
-SCRIPT_DIR = Path(__file__).parent
-PROJECT_DIR = SCRIPT_DIR.parent
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = SCRIPT_DIR.parent.parent
 DATA_DIR = PROJECT_DIR / "public" / "data"
-ABI_DIR = PROJECT_DIR / "abi"
+ABI_DIR = SCRIPT_DIR / "abi"
 
 ESCROWS_FILE = DATA_DIR / "escrows.json"
 TOKENS_FILE = DATA_DIR / "tokens.json"

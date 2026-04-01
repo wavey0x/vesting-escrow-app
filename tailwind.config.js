@@ -8,7 +8,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        // STYLEGUIDE.md color system - using CSS variables for theme support
+        // Shared design tokens documented in docs/design/style-guide.md
         primary: 'var(--color-primary)',
         secondary: 'var(--color-secondary)',
         tertiary: 'var(--color-tertiary)',
@@ -25,7 +25,7 @@ export default {
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       fontSize: {
-        // STYLEGUIDE.md type scale
+        // Shared type scale documented in docs/design/style-guide.md
         'title': ['18px', { lineHeight: '1.4', fontWeight: '600' }],
         'heading': ['16px', { lineHeight: '1.4', fontWeight: '500' }],
         'body': ['13px', { lineHeight: '1.5' }],

@@ -1,6 +1,6 @@
 /**
- * Formatting utilities per REQUIREMENTS.md
- * Uses Intl.NumberFormat for locale-aware formatting
+ * Formatting utilities for human-readable token, date, and duration display.
+ * Uses Intl.NumberFormat for locale-aware formatting.
  */
 
 // Format token amount with proper decimals

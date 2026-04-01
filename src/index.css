@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* STYLEGUIDE.md - Base Styles */
+/* Base design tokens documented in docs/design/style-guide.md */
 @layer base {
   :root {
     --color-primary: #111111;
@@ -43,7 +43,7 @@
   }
 }
 
-/* STYLEGUIDE.md - Component Styles */
+/* Shared component primitives */
 @layer components {
   /* Spinner - Primary */
   .spinner {
@@ -159,7 +159,7 @@
     @apply focus:outline-none focus:border-primary;
   }
 
-  /* Cards (minimal, per STYLEGUIDE) */
+  /* Cards and panels */
   .card {
     @apply border border-divider-subtle p-4;
   }
