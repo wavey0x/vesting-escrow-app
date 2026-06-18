@@ -1,5 +1,5 @@
 {
-  "lastIndexed": "2026-06-06T02:31:45.908331+00:00",
+  "lastIndexed": "2026-06-18T02:52:04.937349+00:00",
   "chainId": 1,
   "escrows": [
     {
@@ -8835,16 +8835,72 @@
       "openClaim": true,
       "blockNumber": 25250462,
       "txHash": "1c2f7bfd8b314cec7efb2d62ed99991c109cda8555159783345733dc726ee965"
+    },
+    {
+      "address": "0xe750eD04bC99441DA06bFFFBf8E7DB3702f8183b",
+      "factory": "0xcf61782465Ff973638143d6492B51A85986aB347",
+      "funder": "0x5f38B14db41031290F6D482Db952FF06b3b2C536",
+      "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "recipient": "0xeeB0d8fe810643bAafae9C60CAFca571125b3989",
+      "amount": "2880000000",
+      "vestingStart": 1780264800,
+      "vestingDuration": 2592000,
+      "cliffLength": 0,
+      "openClaim": true,
+      "blockNumber": 25339028,
+      "txHash": "6e3bfe5b9a3f9122c8b8cd47f6592cf81aca00373e928b0edaffb339f992385a"
+    },
+    {
+      "address": "0x8D8C930Ed8870E9Ca3C5860A25188CFf60a51337",
+      "factory": "0xcf61782465Ff973638143d6492B51A85986aB347",
+      "funder": "0x5f38B14db41031290F6D482Db952FF06b3b2C536",
+      "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "recipient": "0xe71a49c31028f91454Dee6f0f621Fa70026f3605",
+      "amount": "3840000000",
+      "vestingStart": 1780264800,
+      "vestingDuration": 2592000,
+      "cliffLength": 0,
+      "openClaim": true,
+      "blockNumber": 25339028,
+      "txHash": "6e3bfe5b9a3f9122c8b8cd47f6592cf81aca00373e928b0edaffb339f992385a"
+    },
+    {
+      "address": "0x1Ba0D175759376ba9e763b9513C5A293D0F89132",
+      "factory": "0xcf61782465Ff973638143d6492B51A85986aB347",
+      "funder": "0x5f38B14db41031290F6D482Db952FF06b3b2C536",
+      "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "recipient": "0x17C65468F4493B53E4e242A9671C91bbF445C1B9",
+      "amount": "2560000000",
+      "vestingStart": 1780264800,
+      "vestingDuration": 2592000,
+      "cliffLength": 0,
+      "openClaim": true,
+      "blockNumber": 25339028,
+      "txHash": "6e3bfe5b9a3f9122c8b8cd47f6592cf81aca00373e928b0edaffb339f992385a"
+    },
+    {
+      "address": "0x0086C92030BdD5e7182b562D5a9BAd683c76a323",
+      "factory": "0xcf61782465Ff973638143d6492B51A85986aB347",
+      "funder": "0x5f38B14db41031290F6D482Db952FF06b3b2C536",
+      "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "recipient": "0xf00f1B31C033fBc15Aba7846EC001D55c274b798",
+      "amount": "9000000000",
+      "vestingStart": 1780264800,
+      "vestingDuration": 2592000,
+      "cliffLength": 0,
+      "openClaim": true,
+      "blockNumber": 25339028,
+      "txHash": "6e3bfe5b9a3f9122c8b8cd47f6592cf81aca00373e928b0edaffb339f992385a"
     }
   ],
   "factories": {
     "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF": {
       "deployBlock": 18291969,
-      "lastBlock": 25255372
+      "lastBlock": 25341577
     },
     "0xcf61782465Ff973638143d6492B51A85986aB347": {
       "deployBlock": 19739664,
-      "lastBlock": 25255372
+      "lastBlock": 25341577
     }
   }
 }
