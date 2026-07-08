@@ -6,6 +6,7 @@ interface TokenLogoProps {
   symbol?: string;
   logoUrl?: string | null;
   size?: 32 | 128;
+  displaySize?: number;
   className?: string;
 }
 
@@ -14,6 +15,7 @@ export default function TokenLogo({
   symbol,
   logoUrl,
   size = 32,
+  displaySize = size,
   className = '',
 }: TokenLogoProps) {
   const [sourceIndex, setSourceIndex] = useState(0);
@@ -29,7 +31,7 @@ export default function TokenLogo({
     return (
       <div
         className={`flex items-center justify-center bg-divider-subtle text-secondary rounded-full ring-1 ring-secondary/30 ${className}`}
-        style={{ width: size, height: size }}
+        style={{ width: displaySize, height: displaySize }}
       >
         <span className="text-xs font-medium">
           {symbol?.charAt(0).toUpperCase() || '?'}
@@ -45,6 +47,7 @@ export default function TokenLogo({
       width={size}
       height={size}
       className={`rounded-full ring-1 ring-secondary/30 ${className}`}
+      style={{ width: displaySize, height: displaySize }}
       onError={() => setSourceIndex((i) => i + 1)}
     />
   );

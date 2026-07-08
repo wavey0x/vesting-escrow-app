@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { isAddress, Address as ViemAddress, maxUint256 } from 'viem';
@@ -20,12 +20,10 @@ import { useLiveEscrowData } from '../hooks/useLiveEscrowData';
 import { useEscrowNames } from '../contexts/EscrowNamesContext';
 import {
   formatUSD,
-  formatDateTime,
   formatDurationHuman,
 } from '../lib/format';
 import {
   mergeEscrowData,
-  getVestingProgress,
   getAmountsBreakdown,
   canClaim,
   canRevoke,
@@ -33,7 +31,6 @@ import {
   isOwner,
   isRecipient,
 } from '../lib/escrow';
-import { getEtherscanTxUrl } from '../lib/constants';
 
 const escrowAbi = [
   {
@@ -156,7 +153,6 @@ export default function EscrowDetail() {
   }
 
   const escrow = mergeEscrowData(indexedEscrow, liveData);
-  const progress = getVestingProgress(escrow);
   const amounts = getAmountsBreakdown(escrow);
   const decimals = tokenMetadata?.decimals || 18;
 
@@ -172,16 +168,19 @@ export default function EscrowDetail() {
   const userIsOwner = isOwner(escrow, userAddress);
   const userIsRecipient = isRecipient(escrow, userAddress);
   const cliffEnd = escrow.vestingStart + escrow.cliffLength;
+  const revokedOn = liveData && liveData.disabledAt < liveData.endTime
+    ? Number(liveData.disabledAt)
+    : null;
   const cliffLabel = showCliffDuration ? 'Cliff Duration' : 'Cliff Date';
   const cliffDisplay = showCliffDuration
     ? formatDurationDays(escrow.cliffLength)
     : `${now >= cliffEnd ? 'Reached' : formatDaysUntil(cliffEnd, now)} / ${formatLocalIsoDate(cliffEnd)}`;
 
   return (
-    <div className="space-y-8 max-w-3xl mx-auto">
+    <div className="mx-auto w-full max-w-3xl min-w-0 space-y-8">
       {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex min-w-0 items-start justify-between gap-4">
+        <div className="min-w-0">
           {/* Top row: back button (in logo-width container) + badge - aligns badge with title */}
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 flex-shrink-0">
@@ -194,15 +193,15 @@ export default function EscrowDetail() {
             <StatusBadge status={escrow.status} isLoading={loadingLive} />
           </div>
           {/* Logo + title row */}
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <TokenLogo
               address={escrow.token}
               symbol={tokenMetadata?.symbol}
               logoUrl={tokenMetadata?.logoUrl}
               size={32}
             />
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
                 {isEditingName ? (
                   <input
                     type="text"
@@ -222,13 +221,13 @@ export default function EscrowDetail() {
                     }}
                     autoFocus
                     placeholder="Enter name..."
-                    className="text-2xl font-bold text-primary bg-transparent border-b border-primary outline-none"
+                    className="min-w-0 max-w-full text-2xl font-bold text-primary bg-transparent border-b border-primary outline-none"
                   />
                 ) : (
                   <>
                     {getName(escrow.address) ? (
                       <h1
-                        className="text-2xl font-bold text-primary cursor-pointer hover:text-secondary transition-colors"
+                        className="truncate text-2xl font-bold text-primary cursor-pointer hover:text-secondary transition-colors"
                         onClick={() => {
                           setEditNameValue(getName(escrow.address) || '');
                           setIsEditingName(true);
@@ -239,7 +238,7 @@ export default function EscrowDetail() {
                       </h1>
                     ) : (
                       <>
-                        <h1 className="text-2xl font-bold text-primary">
+                        <h1 className="truncate text-2xl font-bold text-primary">
                           {tokenMetadata?.symbol || 'Unknown Token'} Escrow
                         </h1>
                         <button
@@ -259,7 +258,7 @@ export default function EscrowDetail() {
                   </>
                 )}
               </div>
-              <div className="flex items-center gap-1.5 mt-1">
+              <div className="flex min-w-0 items-center gap-1.5 mt-1">
                 <AddressDisplay address={escrow.address} showCopy showLink={false} className="text-sm text-secondary" />
                 <a
                   href={`https://etherscan.io/address/${escrow.address}`}
@@ -294,22 +293,23 @@ export default function EscrowDetail() {
       </div>
 
       {/* Progress */}
-      <div className="p-6 border border-divider-strong rounded-lg">
-        <div className="flex justify-end mb-1">
-          <span className="text-xs text-secondary">{progress.toFixed(1)}%</span>
-        </div>
+      <div className="w-full min-w-0 px-6 py-8 border border-divider-strong rounded-lg">
         <VestingTimeline
           vestingStart={escrow.vestingStart}
           vestingDuration={escrow.vestingDuration}
           cliffLength={escrow.cliffLength}
-          claimedPercent={amounts.total > 0n ? Number((amounts.claimed * 100n) / amounts.total) : 0}
-          claimablePercent={amounts.total > 0n ? Number((amounts.claimable * 100n) / amounts.total) : 0}
-          lockedPercent={amounts.total > 0n ? Number((amounts.locked * 100n) / amounts.total) : 0}
+          claimedAmount={amounts.claimed}
+          claimableAmount={amounts.claimable}
+          lockedAmount={amounts.locked}
+          totalAmount={amounts.total}
+          decimals={decimals}
+          tokenSymbol={tokenMetadata?.symbol}
+          isLoading={!liveData && loadingLive}
         />
       </div>
 
       {/* Amounts */}
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid min-w-0 gap-4 md:grid-cols-3">
         <ClaimableCard
           amount={amounts.claimable}
           decimals={decimals}
@@ -321,23 +321,23 @@ export default function EscrowDetail() {
           onSuccess={() => refetch()}
         />
         <AmountCard
+          label="Total"
+          amount={amounts.total}
+          decimals={decimals}
+          value={formatValue(amounts.total)}
+        />
+        <AmountCard
           label="Claimed"
           amount={amounts.claimed}
           decimals={decimals}
           value={formatValue(amounts.claimed)}
           isLoading={loadingLive}
         />
-        <AmountCard
-          label="Total"
-          amount={amounts.total}
-          decimals={decimals}
-          value={formatValue(amounts.total)}
-        />
       </div>
 
       {/* Actions */}
       {(showRevoke || showDisown) && (
-        <div className="p-6 border border-divider-strong rounded-lg">
+        <div className="w-full min-w-0 p-6 border border-divider-strong rounded-lg">
           <h2 className="text-lg font-semibold text-primary mb-4">Actions</h2>
           <div className="flex flex-wrap gap-4">
             {showRevoke && (
@@ -360,16 +360,32 @@ export default function EscrowDetail() {
       )}
 
       {/* Details */}
-      <div className="p-6 border border-divider-strong rounded-lg">
+      <div className="w-full min-w-0 p-6 border border-divider-strong rounded-lg">
         <h2 className="text-lg font-semibold text-primary mb-4">Details</h2>
         <div className="space-y-4">
           <DetailRow label="Escrow Address">
             <AddressDisplay address={escrow.address} />
           </DetailRow>
           <DetailRow label="Token">
-            <div className="flex items-center gap-2">
-              <AddressDisplay address={escrow.token} />
-              <span className="text-secondary">({tokenMetadata?.symbol})</span>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded bg-divider-subtle px-2 py-1">
+                <TokenLogo
+                  address={escrow.token}
+                  symbol={tokenMetadata?.symbol}
+                  logoUrl={tokenMetadata?.logoUrl}
+                  size={32}
+                  displaySize={18}
+                />
+                <span className="font-medium text-primary">
+                  {tokenMetadata?.symbol || 'Unknown'}
+                </span>
+                {typeof tokenPrice === 'number' && (
+                  <span className="text-tertiary">
+                    {formatUSD(tokenPrice)}
+                  </span>
+                )}
+              </span>
+              <CopyAddressIconButton address={escrow.token} label="Copy token address" />
             </div>
           </DetailRow>
           <DetailRow label="Recipient">
@@ -393,17 +409,11 @@ export default function EscrowDetail() {
               </div>
             </DetailRow>
           )}
-          <DetailRow label="Start Date">
-            {formatDateTime(escrow.vestingStart)}
-          </DetailRow>
-          <DetailRow label="End Date">
-            {formatDateTime(escrow.vestingStart + escrow.vestingDuration)}
-          </DetailRow>
           <DetailRow label="Duration">
             {formatDurationHuman(escrow.vestingDuration)}
           </DetailRow>
-          <DetailRow label={escrow.cliffLength > 0 ? cliffLabel : 'Cliff'}>
-            {escrow.cliffLength > 0 ? (
+          {escrow.cliffLength > 0 && (
+            <DetailRow label={cliffLabel}>
               <button
                 onClick={() => setShowCliffDuration(!showCliffDuration)}
                 className="text-primary hover:text-secondary transition-colors cursor-pointer"
@@ -411,10 +421,13 @@ export default function EscrowDetail() {
               >
                 {cliffDisplay}
               </button>
-            ) : (
-              'None'
-            )}
-          </DetailRow>
+            </DetailRow>
+          )}
+          {revokedOn !== null && (
+            <DetailRow label="Revoked On">
+              {formatLocalIsoDate(revokedOn)}
+            </DetailRow>
+          )}
           <DetailRow label="Open Claim">
             {escrow.openClaim ? 'True' : 'False'}
           </DetailRow>
@@ -445,6 +458,9 @@ function ClaimableCard({
 }) {
   const { data: hash, isPending, writeContract, error, reset } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const [showSuccess, setShowSuccess] = useState(false);
+  const handledSuccessHash = useRef<string>();
+  const onSuccessRef = useRef(onSuccess);
 
   const handleClaim = () => {
     writeContract({
@@ -455,27 +471,43 @@ function ClaimableCard({
     });
   };
 
-  // Handle success callback
   useEffect(() => {
-    if (isSuccess && onSuccess) {
-      onSuccess();
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  // Handle success callback once per transaction and keep success state temporary.
+  useEffect(() => {
+    if (!isSuccess || !hash || handledSuccessHash.current === hash) {
+      return;
     }
-  }, [isSuccess, onSuccess]);
+
+    handledSuccessHash.current = hash;
+    setShowSuccess(true);
+    onSuccessRef.current?.();
+
+    const timeoutId = window.setTimeout(() => {
+      setShowSuccess(false);
+      handledSuccessHash.current = undefined;
+      reset();
+    }, 5_000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [hash, isSuccess, reset]);
 
   const isTxLoading = isPending || isConfirming;
   const hasClaimableAmount = amount > 0n;
-  const canClick = isClaimable && hasClaimableAmount && !isTxLoading && !isSuccess;
+  const canClick = isClaimable && hasClaimableAmount && !isTxLoading && !showSuccess;
 
   // Render the card content (same structure for all states)
   const renderCardContent = () => (
     <>
       <div className="text-sm text-secondary mb-1">
-        {isSuccess ? 'Claimed' : 'Claimable'}
+        Claimable
       </div>
       {isLoading ? (
         <div className="h-7 w-24 skeleton rounded" />
       ) : (
-        <TokenAmount value={amount} decimals={decimals} className="text-lg font-medium text-primary block" />
+        <TokenAmount value={amount} decimals={decimals} className="block truncate text-lg font-medium text-primary" />
       )}
       {isLoading ? (
         <div className="h-4 w-16 skeleton rounded mt-1" />
@@ -486,29 +518,23 @@ function ClaimableCard({
   );
 
   // Determine card styling based on state
-  const isActive = canClick || isTxLoading || isSuccess;
-  const cardClasses = `relative p-4 border rounded-lg ${
+  const isActive = canClick || isTxLoading || showSuccess;
+  const cardClasses = `relative min-w-0 p-4 border rounded-lg ${
     isActive
       ? 'border-primary' + (isTxLoading ? ' bg-divider-subtle' : '')
       : 'border-divider-strong'
   }`;
 
-  // Success state - clickable link to etherscan
-  if (isSuccess && hash) {
+  if (showSuccess) {
     return (
-      <a
-        href={getEtherscanTxUrl(hash)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`${cardClasses} bg-claimable/5 hover:bg-claimable/10 transition-colors block`}
-      >
-        <div className="absolute top-2 right-2">
-          <svg className="w-5 h-5 text-claimable" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
+      <div className={`${cardClasses} overflow-hidden`}>
+        <div className="opacity-20">
+          {renderCardContent()}
         </div>
-        {renderCardContent()}
-      </a>
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background text-sm font-medium text-claimable">
+          🎉 Claim success!
+        </div>
+      </div>
     );
   }
 
@@ -573,12 +599,12 @@ function AmountCard({
   isLoading?: boolean;
 }) {
   return (
-    <div className="relative p-4 border rounded-lg border-divider-strong">
+    <div className="relative min-w-0 p-4 border rounded-lg border-divider-strong">
       <div className="text-sm text-secondary mb-1">{label}</div>
       {isLoading ? (
         <div className="h-7 w-24 skeleton rounded" />
       ) : (
-        <TokenAmount value={amount} decimals={decimals} className="text-lg font-medium text-primary block" />
+        <TokenAmount value={amount} decimals={decimals} className="block truncate text-lg font-medium text-primary" />
       )}
       {isLoading ? (
         <div className="h-4 w-16 skeleton rounded mt-1" />
@@ -601,5 +627,41 @@ function DetailRow({
       <span className="text-secondary w-32 flex-shrink-0">{label}</span>
       <div className="text-primary">{children}</div>
     </div>
+  );
+}
+
+function CopyAddressIconButton({
+  address,
+  label,
+}: {
+  address: string;
+  label: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(address);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2_000);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="text-tertiary hover:text-primary transition-colors"
+      title={copied ? 'Copied!' : label}
+      aria-label={copied ? 'Copied' : label}
+    >
+      {copied ? (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+      ) : (
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      )}
+    </button>
   );
 }
