@@ -445,52 +445,54 @@ export default function Manage() {
       {activeTab === 'search' && (
         <div className="space-y-6 min-h-[200px]">
           <form onSubmit={handleSearch} className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-2">
               <input
                 id="search"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Enter escrow, recipient, or funder address"
-                className="min-w-64 flex-1 px-3 py-2 text-sm border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
+                placeholder="Enter escrow or recipient address"
+                className="flex-1 px-3 py-2 text-sm border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
               />
-              <label className="flex items-center gap-2 px-1 text-sm text-secondary cursor-pointer whitespace-nowrap">
-                <span>Include funders</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={includeFunders}
-                  onClick={toggleIncludeFunders}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    includeFunders ? 'bg-divider-strong' : 'bg-divider-subtle'
-                  }`}
-                >
-                  <span
-                    className="inline-block h-3.5 w-3.5 rounded-full bg-white border border-divider-strong shadow-sm transition-transform"
-                    style={{ transform: includeFunders ? 'translateX(18px)' : 'translateX(4px)' }}
-                  />
-                </button>
-              </label>
               <Button type="submit">Search</Button>
             </div>
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-sm text-secondary cursor-pointer">
-                <span>Hide completed</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={hideCompleted}
-                  onClick={toggleHideCompleted}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform`}
-                    style={{ transform: hideCompleted ? 'translateX(18px)' : 'translateX(4px)' }}
-                  />
-                </button>
-              </label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-1.5 text-xs text-secondary cursor-pointer whitespace-nowrap">
+                  <span>Include funders</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={includeFunders}
+                    onClick={toggleIncludeFunders}
+                    className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                      includeFunders ? 'bg-divider-strong' : 'bg-divider-subtle'
+                    }`}
+                  >
+                    <span
+                      className="inline-block h-3 w-3 rounded-full bg-white border border-divider-strong transition-transform"
+                      style={{ transform: includeFunders ? 'translateX(14px)' : 'translateX(2px)' }}
+                    />
+                  </button>
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-secondary cursor-pointer whitespace-nowrap">
+                  <span>Hide completed</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={hideCompleted}
+                    onClick={toggleHideCompleted}
+                    className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                      hideCompleted ? 'bg-divider-strong' : 'bg-divider-subtle'
+                    }`}
+                  >
+                    <span
+                      className="inline-block h-3 w-3 rounded-full bg-white border border-divider-strong transition-transform"
+                      style={{ transform: hideCompleted ? 'translateX(14px)' : 'translateX(2px)' }}
+                    />
+                  </button>
+                </label>
+              </div>
               <div>
                 {(searchError || derivedSearchError) && (
                   <p className="text-sm text-red-600 dark:text-red-400">{searchError || derivedSearchError}</p>
