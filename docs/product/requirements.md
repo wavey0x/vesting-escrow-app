@@ -16,7 +16,7 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 
 | Tab | Notes |
 | --- | --- |
-| `Search` | Search by escrow address or recipient address |
+| `Search` | Search by escrow address or recipient address, with optional funder matching |
 | `Starred` | Escrows saved locally by the user |
 | `My Escrows` | Escrows tied to the connected wallet |
 | `All` | Admin-only tab enabled with `localStorage.admin = 'true'` |
@@ -27,6 +27,7 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 - Without a query, the initial tab prefers `Starred`, then `My Escrows`, then `Search`.
 - Exact escrow address queries redirect to `/vest/:address`.
 - Recipient address queries render a result list on the page.
+- `includeFunders` defaults to `false` and is URL-backed with `?includeFunders=true` when enabled.
 - `hideCompleted` defaults to `true` and is URL-backed with `?hideCompleted=false` when disabled.
 - Status filters can narrow the visible list by `cliff`, `vesting`, `claimable`, `completed`, or `revoked`.
 - Escrows are sorted with active escrows first, then by newest `vestingStart`.

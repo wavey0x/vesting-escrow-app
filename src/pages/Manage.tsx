@@ -38,6 +38,7 @@ export default function Manage() {
     const param = searchParams.get('hideCompleted');
     return param === null ? true : param !== 'false';
   });
+  const includeFunders = searchParams.get('includeFunders') === 'true';
   const [hideFullyClaimed, setHideFullyClaimed] = useState(true); // Admin-only: hide escrows with 0 claimable
   const [selectedStatuses, setSelectedStatuses] = useState<Set<EscrowStatus>>(() => new Set(ALL_STATUSES));
 
@@ -69,6 +70,16 @@ export default function Manage() {
     }
     setSearchParams(newParams);
   }, [hideCompleted, searchParams, setSearchParams]);
+
+  const toggleIncludeFunders = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams);
+    if (includeFunders) {
+      newParams.delete('includeFunders');
+    } else {
+      newParams.set('includeFunders', 'true');
+    }
+    setSearchParams(newParams);
+  }, [includeFunders, searchParams, setSearchParams]);
 
   // Determine if escrow is completed based on time
   const isCompleted = useCallback((escrow: IndexedEscrow) => {
@@ -154,13 +165,16 @@ export default function Manage() {
     if (!urlQuery || !escrowsIndex?.escrows) return null;
     if (!isAddress(urlQuery)) return null;
 
-    // Check if it's a recipient address
-    const recipientEscrows = escrowsIndex.escrows
-      .filter((e) => e.recipient.toLowerCase() === urlQuery.toLowerCase())
+    const lowerQuery = urlQuery.toLowerCase();
+    const matchingEscrows = escrowsIndex.escrows
+      .filter((e) => (
+        e.recipient.toLowerCase() === lowerQuery ||
+        (includeFunders && e.funder.toLowerCase() === lowerQuery)
+      ))
       .sort((a, b) => b.blockNumber - a.blockNumber);
 
-    return recipientEscrows.length > 0 ? recipientEscrows : null;
-  }, [urlQuery, escrowsIndex]);
+    return matchingEscrows.length > 0 ? matchingEscrows : null;
+  }, [urlQuery, escrowsIndex, includeFunders]);
 
   // If URL query matches an exact escrow address, navigate to it
   useEffect(() => {
@@ -227,7 +241,9 @@ export default function Manage() {
 
     if (!trimmedQuery) {
       setSearchError('Please enter an address');
-      setSearchParams({});
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('q');
+      setSearchParams(newParams);
       return;
     }
 
@@ -236,8 +252,10 @@ export default function Manage() {
       return;
     }
 
-    // Update URL - the derived searchResults will update automatically
-    setSearchParams({ q: trimmedQuery });
+    // Update URL while preserving search options
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('q', trimmedQuery);
+    setSearchParams(newParams);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -427,15 +445,32 @@ export default function Manage() {
       {activeTab === 'search' && (
         <div className="space-y-6 min-h-[200px]">
           <form onSubmit={handleSearch} className="space-y-3">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 id="search"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Enter escrow or recipient address"
-                className="flex-1 px-3 py-2 text-sm border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
+                placeholder="Enter escrow, recipient, or funder address"
+                className="min-w-64 flex-1 px-3 py-2 text-sm border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
               />
+              <label className="flex items-center gap-2 px-1 text-sm text-secondary cursor-pointer whitespace-nowrap">
+                <span>Include funders</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={includeFunders}
+                  onClick={toggleIncludeFunders}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    includeFunders ? 'bg-divider-strong' : 'bg-divider-subtle'
+                  }`}
+                >
+                  <span
+                    className="inline-block h-3.5 w-3.5 rounded-full bg-white border border-divider-strong shadow-sm transition-transform"
+                    style={{ transform: includeFunders ? 'translateX(18px)' : 'translateX(4px)' }}
+                  />
+                </button>
+              </label>
               <Button type="submit">Search</Button>
             </div>
             <div className="flex items-center justify-between">
@@ -467,7 +502,7 @@ export default function Manage() {
           {searchResults && searchResults.length > 0 && (
             <div className="space-y-4">
               <p className="text-sm text-secondary">
-                Found {sortAndFilterEscrows(searchResults).length} escrow{sortAndFilterEscrows(searchResults).length !== 1 ? 's' : ''} for this recipient
+                Found {sortAndFilterEscrows(searchResults).length} escrow{sortAndFilterEscrows(searchResults).length !== 1 ? 's' : ''}{includeFunders ? ' matching this address' : ' for this recipient'}
                 {hideCompleted && searchResults.length !== sortAndFilterEscrows(searchResults).length && (
                   <span className="text-tertiary"> ({searchResults.length - sortAndFilterEscrows(searchResults).length} completed hidden)</span>
                 )}
