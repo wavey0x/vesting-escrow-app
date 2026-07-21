@@ -56,14 +56,24 @@ def vesting_target(project, owner):
 
 
 @pytest.fixture(scope="module")
+def vesting_v2_target(project, owner):
+    yield owner.deploy(project.VestingEscrowSimpleV2)
+
+
+@pytest.fixture(scope="module")
 def vyper_donation(accounts):
     # vyperlang.eth
     yield accounts[3]
 
 
 @pytest.fixture(scope="module")
-def vesting_factory(project, owner, vesting_target, vyper_donation):
-    yield owner.deploy(project.VestingEscrowFactory, vesting_target, vyper_donation)
+def vesting_factory(project, owner, vesting_target, vesting_v2_target, vyper_donation):
+    yield owner.deploy(
+        project.VestingEscrowFactory,
+        vesting_target,
+        vesting_v2_target,
+        vyper_donation,
+    )
 
 
 @pytest.fixture(scope="module")

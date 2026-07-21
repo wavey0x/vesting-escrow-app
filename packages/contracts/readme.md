@@ -7,7 +7,9 @@
 
 The local unreleased source ports the compatible Curve deployment's escrow
 registry, zero donation default, revoke ordering, and dust-solvency hardening.
-See [`UPSTREAM.md`](UPSTREAM.md) for exact provenance and bytecode validation.
+It also adds an explicit ERC-4626 share mode with a separate implementation
+target. See [`UPSTREAM.md`](UPSTREAM.md) for exact provenance and bytecode
+validation.
 
 A modified version of [Curve Vesting Escrow](https://github.com/curvefi/curve-dao-contracts) contracts with added functionality:
 
@@ -23,8 +25,9 @@ A modified version of [Curve Vesting Escrow](https://github.com/curvefi/curve-da
 
 ## Contracts
 
-- [`VestingEscrowFactory`](contracts/VestingEscrowFactory.vy): Factory to deploy many simplified vesting contracts
+- [`VestingEscrowFactory`](contracts/VestingEscrowFactory.vy): Factory routing legacy tokens and ERC-4626 shares to separate implementations
 - [`VestingEscrowSimple`](contracts/VestingEscrowSimple.vy): Simplified vesting contract that holds tokens for a single beneficiary
+- [`VestingEscrowSimpleV2`](contracts/VestingEscrowSimpleV2.vy): Vests principal measured in underlying assets while funding and paying claims in vault shares
 
 ## Usage
 
@@ -51,6 +54,11 @@ funder = accounts.load(name)
 factory = project.VestingEscrowFactory.at('0x200C92Dd85730872Ab6A1e7d5E40A067066257cF')
 factory.deploy_vesting_contract(token, recipient, amount, vesting_duration, vesting_start, cliff_length, open_claim, support_vyper, owner, sender=funder)
 ```
+
+The deployed v0.3.0 factory above only supports the legacy nine-argument call.
+For the unreleased factory, pass `yield_to_owner=True` as the final argument to
+use ERC-4626 share mode. `token` and `amount` are then the vault share token and
+share amount; claims remain denominated and transferred in shares.
 
 ## Ethereum mainnet deployment
 

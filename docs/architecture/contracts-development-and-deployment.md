@@ -19,14 +19,13 @@ source, not the frontend's current write target.
 
 The local unreleased source ports the Curve fork's escrow registry, zero default
 donation, revoke checks-effects-interactions ordering, and dust-solvency
-assertion. With Vyper 0.3.10 and the Curve constructor values, the resulting
-factory and target runtime hashes exactly reproduce the onchain Curve
-deployments. The consumer-facing escrow ABI and creation event remain
-compatible; the factory adds two registry getters.
+assertion. It now also includes a separate `VestingEscrowSimpleV2` implementation
+and explicit factory routing for vault shares. The legacy path and creation
+event remain compatible; the new mode adds a companion configuration event.
 
-The toolchain is locked to Python 3.11, Ape 0.8, and Foundry 1.5.1. All 50
-functional tests pass with gas and coverage reporting, and the Hypothesis
-integration test passes. Root CI runs the same commands for contract changes.
+The toolchain is locked to Python 3.11, Ape 0.8, and Foundry 1.5.1. Root CI runs
+the locked compile, functional, coverage, and Hypothesis commands for contract
+changes.
 
 ## Rollout invariants
 
@@ -101,13 +100,13 @@ harden them so one command performs a deterministic, auditable deployment:
 2. Select the intended signer without embedding a key.
 3. Print and confirm the deployer, balance, nonce, gas assumptions, compiler
    versions, release commit, and constructor arguments.
-4. Deploy `VestingEscrowSimple` first.
-5. Deploy `VestingEscrowFactory(target, vyper_donate)` using that exact target.
-6. Read back `TARGET()` and `VYPER()` and compare them to the inputs.
+4. Deploy `VestingEscrowSimple` and `VestingEscrowSimpleV2` first.
+5. Deploy `VestingEscrowFactory(target, target_v2, vyper_donate)` using those exact targets.
+6. Read back `TARGET()`, `TARGET_V2()`, and `VYPER()` and compare them to the inputs.
 7. Write a deployment manifest containing chain ID, addresses, deployment block
    numbers, transaction hashes, constructor arguments, source commit, compiler
    settings, and bytecode hashes.
-8. Verify both contracts on the explorer and fail if verification cannot be
+8. Verify all three contracts on the explorer and fail if verification cannot be
    reproduced from the frozen source.
 
 Run the script on a local chain, a pinned mainnet fork, and Sepolia with the
@@ -119,12 +118,14 @@ contracts without manual address copying.
 ## Phase 4: deploy and canary on mainnet
 
 - Tag the frozen release and deploy from a reviewed signer or multisig process.
-- Verify the implementation before deploying the factory.
-- Verify the factory, its constructor arguments, `TARGET()`, `VYPER()`, code
+- Verify both implementations before deploying the factory.
+- Verify the factory, its constructor arguments, `TARGET()`, `TARGET_V2()`, `VYPER()`, code
   hashes, chain ID, transaction hashes, and deployment blocks.
-- Create a low-value canary escrow using the same UI-facing argument shape.
-- Confirm event decoding, token funding/donation totals, all live getters, claim,
-  and any safe lifecycle action required by the new behavior.
+- Create low-value legacy and ERC-4626 canary escrows using the same UI-facing
+  argument shapes.
+- Confirm both event shapes, exact share funding, the principal snapshot, all
+  live getters, claims, yield claims, and any safe lifecycle action required by
+  the new behavior.
 - Publish the deployment manifest and review evidence before switching the app.
 
 Exit gate: the canary and independent address/bytecode review pass.
@@ -140,6 +141,9 @@ Exit gate: the canary and independent address/bytecode review pass.
   factory metadata.
 - Regenerate reviewed ABIs from the frozen contract build if any consumer-facing
   interface changed. Add version-aware decoding if event signatures differ.
+- Store an explicit escrow mode from the companion event. Use the legacy action
+  ABI for historical escrows and the ERC-4626 action ABI only for escrows whose
+  mode was positively identified.
 - Fix approval accounting before rollout: the current create page compares the
   allowance and balance with `amount`, but a non-zero `support_vyper` transfer
   requires `amount + amount * support_vyper / 10_000`.

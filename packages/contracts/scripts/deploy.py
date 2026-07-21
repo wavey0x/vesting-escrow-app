@@ -45,11 +45,9 @@ def deploy(cli_ctx):
     vyper_donate = "0x70CCBE10F980d80b7eBaab7D2E3A73e87D67B775"
 
     target = project.VestingEscrowSimple.deploy(sender=owner)
-    factory = project.VestingEscrowFactory.deploy(target, vyper_donate, sender=owner)
-
+    target_v2 = project.VestingEscrowSimpleV2.deploy(sender=owner)
     token = project.MockToken.deploy(sender=owner)
-    target = project.VestingEscrowSimple.deploy(sender=owner)
-    factory = project.VestingEscrowFactory.deploy(target, vyper_donate, sender=owner)
+    factory = project.VestingEscrowFactory.deploy(target, target_v2, vyper_donate, sender=owner)
 
     amount = sum(ESCROWS["recipients"].values())
     support_amount = sum(ESCROWS["recipients"].values()) * ESCROWS["support_vyper"] // 10_000

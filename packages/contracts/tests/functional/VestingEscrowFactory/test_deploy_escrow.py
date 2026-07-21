@@ -36,6 +36,10 @@ def test_target_is_set(vesting_factory, vesting_target):
     assert vesting_factory.TARGET() == vesting_target
 
 
+def test_v2_target_is_set(vesting_factory, vesting_v2_target):
+    assert vesting_factory.TARGET_V2() == vesting_v2_target
+
+
 def test_vyper_is_set(vesting_factory, vyper_donation):
     assert vesting_factory.VYPER() == vyper_donation
 
@@ -325,6 +329,7 @@ def test_use_transfer(
 def test_vyper_donation(
     project,
     vesting_target,
+    vesting_v2_target,
     owner,
     recipient,
     token,
@@ -337,7 +342,12 @@ def test_vyper_donation(
     support_vyper,
 ):
     vyper_donation = ZERO_ADDRESS
-    vesting_factory = owner.deploy(project.VestingEscrowFactory, vesting_target, vyper_donation)
+    vesting_factory = owner.deploy(
+        project.VestingEscrowFactory,
+        vesting_target,
+        vesting_v2_target,
+        vyper_donation,
+    )
 
     token.mint(owner, amount + support_amount, sender=owner)
     token.approve(vesting_factory, amount + support_amount, sender=owner)
@@ -358,6 +368,7 @@ def test_vyper_donation(
 def test_vyper_donation_empty(
     project,
     vesting_target,
+    vesting_v2_target,
     owner,
     recipient,
     token,
@@ -370,7 +381,12 @@ def test_vyper_donation_empty(
     vyper_donation = ZERO_ADDRESS
     support_vyper = 0
 
-    vesting_factory = owner.deploy(project.VestingEscrowFactory, vesting_target, vyper_donation)
+    vesting_factory = owner.deploy(
+        project.VestingEscrowFactory,
+        vesting_target,
+        vesting_v2_target,
+        vyper_donation,
+    )
 
     token.mint(owner, amount, sender=owner)
     token.approve(vesting_factory, amount, sender=owner)

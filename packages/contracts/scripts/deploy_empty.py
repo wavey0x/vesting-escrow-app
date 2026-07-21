@@ -42,4 +42,5 @@ def deploy(cli_ctx, network):
     assert vyper_donate == "0x70CCBE10F980d80b7eBaab7D2E3A73e87D67B775"
 
     target = project.VestingEscrowSimple.deploy(sender=account)
-    factory = project.VestingEscrowFactory.deploy(target, vyper_donate, sender=account)
+    target_v2 = project.VestingEscrowSimpleV2.deploy(sender=account)
+    factory = project.VestingEscrowFactory.deploy(target, target_v2, vyper_donate, sender=account)

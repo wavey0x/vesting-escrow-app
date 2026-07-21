@@ -16,7 +16,9 @@ The frontend uses the active factory constant in `src/lib/constants.ts`. The ind
 
 ## VestingEscrowFactory
 
-The factory deploys `VestingEscrowSimple` instances using minimal proxies.
+The deployed factories listed above create `VestingEscrowSimple` minimal
+proxies. The local unreleased factory has two immutable implementation targets:
+`TARGET` for the legacy behavior and `TARGET_V2` for vault-share vesting.
 
 Editable contract sources, tests, and Ape deployment tooling are vendored at
 `packages/contracts/` from the upstream v0.3.0 release. See
@@ -26,8 +28,11 @@ redeployment plan.
 
 The local unreleased source includes the compatible Curve fork's escrow
 registry, zero default donation, revoke ordering, and dust-solvency assertion.
-The escrow ABI and `VestingEscrowCreated` event are unchanged; the factory ABI
-only adds `escrows(uint256)` and `escrows_length()` getters.
+It preserves the legacy escrow ABI and `VestingEscrowCreated` event. The new
+factory constructor is
+`VestingEscrowFactory(target, target_v2, vyper_donate)`, and its final
+`yield_to_owner` argument defaults to `false`, preserving the existing
+nine-argument deployment selector.
 
 ### `deploy_vesting_contract`
 
@@ -42,6 +47,7 @@ only adds `escrows(uint256)` and `escrows_length()` getters.
 | `open_claim` | `bool` | Whether third parties can trigger claims |
 | `support_vyper` | `uint256` | Optional donation in basis points |
 | `owner` | `address` | Address allowed to revoke/disown |
+| `yield_to_owner` | `bool` | Use ERC-4626 share mode and fix the original owner as yield recipient; defaults to `false` |
 
 ### `VestingEscrowCreated`
 
@@ -72,6 +78,23 @@ Non-indexed event fields:
 - `cliff_length`
 - `open_claim`
 
+### `VestingEscrowV2Configured`
+
+ERC-4626 mode emits the unchanged creation event plus a companion event:
+
+```text
+VestingEscrowV2Configured(address,address,address,uint256)
+```
+
+Topic hash:
+
+```text
+0x02ebd48c325e09c1ea4ee84303b2ba00c3f4b185a35571527133ac72f2d37723
+```
+
+Its fields are `escrow`, underlying `asset`, fixed `yield_recipient`, and the
+initial `principal` snapshot in underlying asset units.
+
 ## VestingEscrowSimple
 
 Key state surfaced by the app:
@@ -98,6 +121,41 @@ Core functions surfaced by the app:
 - `revoke(ts, beneficiary)`
 - `disown()`
 
+## VestingEscrowSimpleV2
+
+Funding and payouts are vault shares. At factory finalization, the escrow
+records their initial principal using `convertToAssets`. Later gains are paid
+to the original owner as shares; vault losses are borne proportionally by the
+recipient and owner principal. The contract never redeems shares or transfers
+the underlying asset.
+
+The vault-share balance is split at each claim, yield claim, or revocation:
+
+```text
+B = current vault shares
+V = vault.convertToAssets(B)
+R = remaining principal in asset units
+
+if V <= R:
+    principal shares = B
+    yield shares = 0
+else:
+    yield shares = floor(B * (V - R) / V)
+    principal shares = B - yield shares
+```
+
+Principal shares are paid pro rata against vested or revoked principal. All
+rounding favors the principal pool, and a positive-yield transfer must leave
+enough shares for `convertToAssets(remaining shares) >= remaining principal`.
+The vault token itself cannot be removed through `collect_dust`.
+
+Additional state and actions are:
+
+- `asset()`, `yield_recipient()`, `total_principal()`, and `principal_claimed()`
+- `vested_principal()` and `claimable_principal()` in underlying asset units
+- `unclaimed()`, `locked()`, claims, yield claims, and revoke payouts in shares
+- permissionless `claim_yield()` to the fixed yield recipient
+
 ## Status Logic
 
 `src/lib/escrow.ts` resolves status in this order:
@@ -120,7 +178,11 @@ All Python indexer assets now live under `scripts/indexer/`:
 - `scripts/indexer/abi/VestingEscrowFactory.json`
 - `scripts/indexer/abi/VestingEscrowSimple.json`
 
-The ABI JSON files are indexer assets. The frontend uses inline ABI fragments for the contract calls it needs.
+The ABI JSON files are indexer assets. The frontend uses inline ABI fragments
+for the contract calls it needs. They intentionally remain on the deployed
+legacy interface until a reviewed new factory address and deployment block are
+available. At rollout, add a versioned factory ABI and tag each indexed escrow
+with its mode; do not reinterpret historical escrows as ERC-4626 escrows.
 
 The contract package's compiler artifacts under `packages/contracts/.build/`
 are generated and ignored. If a contract change affects an ABI, regenerate the
