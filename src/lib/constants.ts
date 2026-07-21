@@ -1,10 +1,11 @@
 import { getAddress } from 'viem';
+import { ACTIVE_FACTORY } from './contracts';
 
 // Chain configuration
 export const CHAIN_ID = 1;
 
 // Contract addresses
-export const FACTORY_ADDRESS = '0x200C92Dd85730872Ab6A1e7d5E40A067066257cF' as const;
+export const FACTORY_ADDRESS = ACTIVE_FACTORY.address;
 
 // Data endpoints
 export const ESCROWS_DATA_URL = '/data/escrows.json';

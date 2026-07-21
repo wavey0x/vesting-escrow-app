@@ -37,6 +37,7 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 ### Display
 
 - Merge indexed escrow metadata with live RPC reads.
+- Keep a just-created, confirmed escrow available locally until the public index catches up.
 - Show token metadata, status, vesting progress, amounts, and timeline details.
 - Show estimated USD values when token pricing is available.
 - Allow a local custom name per escrow.
@@ -49,6 +50,7 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 | `Claim` | User is recipient or `open_claim` is enabled and claimable amount is non-zero |
 | `Revoke` | User is current owner, escrow has locked tokens, and vesting has not ended |
 | `Disown` | User is current owner and owner is not the zero address |
+| `Claim Yield` | Version 2 escrow has claimable yield; payout always goes to its fixed yield recipient |
 
 ## Create Flow
 
@@ -62,14 +64,17 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 - Start now or explicit start date
 - `open claim` toggle
 - `support Vyper` toggle
+- Version 2 toggle when the active factory supports it
 
 ### Behavior
 
 - Wallet connection is required.
 - The page reads token symbol, decimals, balance, and allowance.
 - ERC20 approval happens before deployment when allowance is insufficient.
+- Balance and allowance checks include the optional Vyper donation.
 - The owner is the connected wallet; there is no separate owner input in the current UI.
-- The app parses the `VestingEscrowCreated` event from the receipt and routes to the new escrow.
+- Version 2 funding and claims use the vault wrapper token as shares; the app never deposits or redeems underlying assets.
+- The app ABI-decodes `VestingEscrowCreated` and the optional version 2 companion event from the receipt, then routes to the new escrow.
 
 ## Data Model
 
@@ -92,6 +97,7 @@ The detail and list views read live escrow state on demand:
 - `start_time`
 - `cliff_length`
 - `open_claim`
+- Version 2 only: `claimable_yield`, `asset`, `yield_recipient`, `total_principal`, and `principal_claimed`
 
 ### External Data
 
@@ -109,6 +115,7 @@ The detail and list views read live escrow state on demand:
 | `vesting-escrow-names` | User-defined escrow names |
 | `vesting-escrow-theme` | Light or dark theme |
 | `admin` | Enables the `All` tab when set to `'true'` |
+| `vesting-escrow-pending` | Confirmed creations retained for up to seven days while indexing catches up |
 
 ## Stack
 

@@ -8,7 +8,7 @@ The repository now contains all three parts of the system:
 | --- | --- | --- |
 | Web app | `src/` | Reads escrows and creates new ones through the active factory |
 | Indexer | `scripts/indexer/` | Scans all supported factories and generates `public/data/*.json` |
-| Contracts | `packages/contracts/` | Vyper source, Ape config, tests, and deployment scripts |
+| Contracts | `packages/contracts/` | Vyper source, Titanoboa tests, and deployment scripts |
 
 The contract package is the upstream `yearn/yearn-vesting-escrow` v0.3.0 tag at
 commit `d14eed16f5b131bc35c58df2b8b4a03427928ef1`. That release is the source for
@@ -23,9 +23,17 @@ assertion. It now also includes a separate `VestingEscrowSimpleV2` implementatio
 and explicit factory routing for vault shares. The legacy path and creation
 event remain compatible; the new mode adds a companion configuration event.
 
-The toolchain is locked to Python 3.11, Ape 0.8, and Foundry 1.5.1. Root CI runs
-the locked compile, functional, coverage, and Hypothesis commands for contract
-changes.
+The toolchain is locked to Python 3.11, Titanoboa 0.2.8, and Vyper 0.4.3. The
+legacy implementation remains pinned to Vyper 0.3.10 and is compiled through
+VVM. Root CI runs compilation, gas profiling, functional tests, and Hypothesis
+property tests for contract changes.
+
+The Vyper 0.4.3 migration preserves the factory and V2 public ABIs but changes
+their bytecode. Under Prague, V2's nonreentrancy guard uses transient storage,
+so its persistent fields move down one slot relative to the Vyper 0.3.10 build.
+This is safe only because implementations and factory-created minimal proxies
+are immutable: existing escrows are never upgraded, and new V2 proxies are
+initialized against the new target from empty storage.
 
 ## Rollout invariants
 
@@ -42,8 +50,9 @@ changes.
 
 ## Phase 0: establish a reproducible baseline — complete
 
-- Python 3.11, Vyper 0.3.10, Ape 0.8, and Foundry 1.5.1 are the supported
-  contract toolchain.
+- The original baseline used Python 3.11, Vyper 0.3.10, Ape 0.8, and Foundry
+  1.5.1. The maintained toolchain now uses Titanoboa 0.2.8 and Vyper 0.4.3,
+  with VVM used only for the frozen Vyper 0.3.10 legacy implementation.
 - `requirements.in` records direct dependencies and the generated
   `requirements.txt` locks the full Python dependency graph.
 - The unmodified v0.3.0 source was compiled and compared byte-for-byte with the
@@ -51,7 +60,7 @@ changes.
 - The modernized baseline passed all 46 original functional tests and the
   Hypothesis integration test before the contract changes were applied.
 - The root contract workflow is scoped to `packages/contracts/**` and runs the
-  locked compile, gas, coverage, functional, and property-test commands.
+  locked compile, gas-profile, functional, and property-test commands.
 
 Exit gate satisfied: the documented setup reproduces compilation and all tests.
 
@@ -73,7 +82,7 @@ Exit gate satisfied: the documented setup reproduces compilation and all tests.
 Exit gate: the change has reviewable acceptance criteria and its frontend and
 indexer impact is known.
 
-## Phase 2: implement and validate — local validation complete
+## Phase 2: implement and validate — implementation validation complete
 
 - Make the smallest Vyper change that satisfies the specification.
 - Add regression tests first, then unit, boundary, property, and invariant tests
@@ -87,9 +96,10 @@ indexer impact is known.
 - Obtain independent security review; require a new audit when the change alters
   asset flow, authorization, accounting, initialization, or proxy behavior.
 
-Exit gate: tests and review are green, compatibility deltas are documented, and
-the exact release commit is frozen. Independent security review and a mainnet
-fork run remain outstanding before this gate is fully satisfied.
+The local suite and `scripts/fork_smoke.py` pass under Titanoboa. Exit gate:
+tests and review are green, compatibility deltas are documented, and the exact
+release commit is frozen. Independent security review and freezing the release
+commit remain outstanding before this gate is fully satisfied.
 
 ## Phase 3: harden deployment tooling
 
@@ -100,8 +110,10 @@ harden them so one command performs a deterministic, auditable deployment:
 2. Select the intended signer without embedding a key.
 3. Print and confirm the deployer, balance, nonce, gas assumptions, compiler
    versions, release commit, and constructor arguments.
-4. Deploy `VestingEscrowSimple` and `VestingEscrowSimpleV2` first.
-5. Deploy `VestingEscrowFactory(target, target_v2, vyper_donate)` using those exact targets.
+4. Verify and reuse the reviewed legacy `VestingEscrowSimple` target; deploy
+   `VestingEscrowSimpleV2` with Vyper 0.4.3.
+5. Deploy `VestingEscrowFactory(target, target_v2, vyper_donate)` using those
+   exact targets.
 6. Read back `TARGET()`, `TARGET_V2()`, and `VYPER()` and compare them to the inputs.
 7. Write a deployment manifest containing chain ID, addresses, deployment block
    numbers, transaction hashes, constructor arguments, source commit, compiler
@@ -130,31 +142,34 @@ contracts without manual address copying.
 
 Exit gate: the canary and independent address/bytecode review pass.
 
-## Phase 5: integrate the app and indexer
+## Phase 5: integrate the app and indexer — implementation complete, activation pending
 
-- Make the deployment manifest the source of truth for addresses and deployment
-  blocks. Generate or import typed frontend constants and indexer configuration
-  from it instead of maintaining unrelated literals.
-- Point only the create flow at the new active factory. Keep every old factory
-  in the indexer's scan list so old escrow URLs and searches continue to work.
-- Add the new factory with its exact deployment block; do not rewrite historical
-  factory metadata.
-- Regenerate reviewed ABIs from the frozen contract build if any consumer-facing
-  interface changed. Add version-aware decoding if event signatures differ.
-- Store an explicit escrow mode from the companion event. Use the legacy action
-  ABI for historical escrows and the ERC-4626 action ABI only for escrows whose
-  mode was positively identified.
-- Fix approval accounting before rollout: the current create page compares the
-  allowance and balance with `amount`, but a non-zero `support_vyper` transfer
-  requires `amount + amount * support_vyper / 10_000`.
-- Test event parsing from a real deployment receipt and indexer discovery from
-  the new deployment block.
-- Run `npm run lint` and `npm run build`.
+- `config/deployments.json` is now the source of truth for the active create
+  target, every indexed factory, deployment blocks, and supported version.
+- Historical factories remain in the scan list. The active target intentionally
+  remains the deployed version 1 Yearn factory until the reviewed version 2
+  deployment exists.
+- Frontend calls and receipt decoding are version-aware. Historical and
+  companion-event-free escrows use the legacy claim ABI; positively identified
+  version 2 escrows use the one-argument claim ABI and expose yield claims.
+- Approval and balance accounting includes
+  `amount + amount * support_vyper / 10_000`.
+- Confirmed creations are cached locally until the scheduled index catches up.
+- The indexer joins `VestingEscrowCreated` with
+  `VestingEscrowV2Configured`, and unit fixtures plus a read-only historical
+  mainnet event smoke test cover the decoding path.
+- Frontend lint, unit tests, and production build have dedicated CI coverage.
+
+Activation tasks after mainnet deployment:
+
+- add the new factory and exact deployment block to `config/deployments.json`;
+- set it as `activeFactory` only after the canary checks pass;
+- run the indexer to refresh `public/data/*.json` and review the generated diff.
 - Refresh `public/data/*.json` only through
   `scripts/indexer/index_escrows.py`, then review the generated diff.
 
-Exit gate: the production build creates through the new factory and reads both
-new and historical escrows.
+Exit gate: after activation, the production build creates through the new
+factory and reads both new and historical escrows.
 
 ## Phase 6: release, monitor, and roll back
 

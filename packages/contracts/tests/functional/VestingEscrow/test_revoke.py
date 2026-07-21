@@ -1,9 +1,10 @@
-import ape
-from ape.utils import ZERO_ADDRESS
+import boa
+
+from tests.helpers import ZERO_ADDRESS, at, deploy
 
 
 def test_revoke_owner_only(vesting, recipient):
-    with ape.reverts(dev_message="dev: not owner"):
+    with boa.reverts():
         vesting.revoke(sender=recipient)
 
 
@@ -11,13 +12,12 @@ def test_disabled_at_is_initially_end_time(vesting):
     assert vesting.disabled_at() == vesting.end_time()
 
 
-def test_revoke(vesting, owner):
-    tx = vesting.revoke(sender=owner)
-    assert vesting.disabled_at() == tx.timestamp
+def test_revoke(chain, vesting, owner):
+    vesting.revoke(sender=owner)
+    assert vesting.disabled_at() == chain.pending_timestamp
 
 
 def test_revoke_clears_owner_before_token_transfer(
-    project,
     vesting_factory,
     owner,
     recipient,
@@ -27,10 +27,10 @@ def test_revoke_clears_owner_before_token_transfer(
     cliff_duration,
     open_claim,
 ):
-    token = owner.deploy(project.AdversarialToken)
+    token = deploy("test/AdversarialToken", sender=owner)
     token.mint(owner, amount, sender=owner)
     token.approve(vesting_factory, amount, sender=owner)
-    receipt = vesting_factory.deploy_vesting_contract(
+    escrow = vesting_factory.deploy_vesting_contract(
         token,
         recipient,
         amount,
@@ -42,7 +42,7 @@ def test_revoke_clears_owner_before_token_transfer(
         owner,
         sender=owner,
     )
-    vesting = project.VestingEscrowSimple.at(receipt.return_value)
+    vesting = at("VestingEscrowSimple", escrow)
     token.configure(vesting, 0, sender=owner)
 
     vesting.revoke(sender=owner)
@@ -74,14 +74,15 @@ def test_revoke_partially_ununclaimed(
 ):
     balance_owner = token.balanceOf(owner)
     chain.pending_timestamp = start_time + 2 * cliff_duration
-    tx = vesting.revoke(sender=owner)
+    revoke_time = chain.pending_timestamp
+    vesting.revoke(sender=owner)
     chain.pending_timestamp = end_time
 
     assert token.balanceOf(vesting) == vesting.unclaimed()
 
     vesting.claim(sender=recipient)
 
-    expected_amount = amount * (tx.timestamp - start_time) // (end_time - start_time)
+    expected_amount = amount * (revoke_time - start_time) // (end_time - start_time)
     assert token.balanceOf(recipient) == expected_amount
     assert token.balanceOf(owner) == balance_owner + vesting.total_locked() - expected_amount
 
@@ -109,12 +110,12 @@ def test_revoke_for_cliff(
 
 def test_revoke_in_past(chain, vesting, owner):
     ts = chain.pending_timestamp - 1
-    with ape.reverts(dev_message="dev: no back to the future"):
+    with boa.reverts():
         vesting.revoke(ts, sender=owner)
 
 
 def test_revoke_at_end_time(vesting, owner, end_time):
-    with ape.reverts(dev_message="dev: no back to the future"):
+    with boa.reverts():
         vesting.revoke(end_time, sender=owner)
 
 
@@ -137,7 +138,7 @@ def test_revoke_renounce_owner(vesting, owner, start_time, end_time):
 
 def test_revoke_after_end_time(vesting, owner, end_time):
     ts = end_time + 1
-    with ape.reverts(dev_message="dev: no back to the future"):
+    with boa.reverts():
         vesting.revoke(ts, sender=owner)
 
 

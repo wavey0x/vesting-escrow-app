@@ -24,10 +24,14 @@ intentionally ports four changes from the verified Curve deployment at factory
 - clear the escrow owner before the external transfer in `revoke`;
 - assert vested-token solvency after `collect_dust`.
 
-Compiled with Vyper 0.3.10 and the Curve constructor values, the local factory
-and target runtime bytecode hashes exactly match those deployed Curve
-contracts. These changes are unreleased and must not be overwritten during an
-upstream sync.
+Commit `f3dcdd8` records the last all-Vyper-0.3.10 snapshot. At that commit,
+compiling with the Curve constructor values produced factory and target runtime
+bytecode hashes matching the deployed Curve contracts. The legacy
+`VestingEscrowSimple` source remains frozen on Vyper 0.3.10 and is compiled
+through VVM. The current factory, V2 implementation, and mocks use Vyper 0.4.3;
+their behavior and ABI remain compatible where documented, but their bytecode
+is intentionally different. These changes are unreleased and must not be
+overwritten during an upstream sync.
 
 The upstream `.github/workflows/test.yaml` file was intentionally omitted. A
 workflow nested below `packages/contracts/` is not executed by GitHub, and the

@@ -1,4 +1,4 @@
-def test_locked_unclaimed(chain, accounts, vesting, end_time):
+def test_locked_unclaimed(chain, recipient, vesting, end_time):
     assert vesting.locked() == vesting.total_locked()
     assert vesting.unclaimed() == 0
 
@@ -8,7 +8,7 @@ def test_locked_unclaimed(chain, accounts, vesting, end_time):
     assert vesting.locked() == 0
     assert vesting.unclaimed() == vesting.total_locked()
 
-    vesting.claim(sender=accounts[vesting.recipient()])
+    vesting.claim(sender=recipient)
     assert vesting.unclaimed() == 0
 
 
@@ -19,4 +19,4 @@ def test_locked_revoke_dust(owner, vesting, token, amount, start_time, end_time)
     token.mint(owner, amount, sender=owner)
     token.transfer(vesting, amount, sender=owner)
 
-    assert vesting.locked() == amount / 2
+    assert vesting.locked() == amount // 2

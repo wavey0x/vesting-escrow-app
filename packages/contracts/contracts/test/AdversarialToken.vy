@@ -1,7 +1,8 @@
-# @version 0.3.10
-from vyper.interfaces import ERC20
+#pragma version 0.4.3
+#pragma evm-version prague
+from ethereum.ercs import IERC20
 
-implements: ERC20
+implements: IERC20
 
 
 interface VestingEscrow:
@@ -31,12 +32,12 @@ extra_debit: public(uint256)
 @external
 def transfer(receiver: address, amount: uint256) -> bool:
     if msg.sender == self.watched_escrow:
-        self.observed_owner = VestingEscrow(msg.sender).owner()
+        self.observed_owner = staticcall VestingEscrow(msg.sender).owner()
 
     debit: uint256 = amount + self.extra_debit
     self.balanceOf[msg.sender] -= debit
     self.balanceOf[receiver] += amount
-    log Transfer(msg.sender, receiver, amount)
+    log Transfer(sender=msg.sender, receiver=receiver, value=amount)
     return True
 
 
@@ -45,15 +46,15 @@ def transferFrom(owner: address, receiver: address, amount: uint256) -> bool:
     self.balanceOf[owner] -= amount
     self.balanceOf[receiver] += amount
     self.allowance[owner][msg.sender] -= amount
-    log Transfer(owner, receiver, amount)
-    log Approval(owner, msg.sender, self.allowance[owner][msg.sender])
+    log Transfer(sender=owner, receiver=receiver, value=amount)
+    log Approval(owner=owner, spender=msg.sender, value=self.allowance[owner][msg.sender])
     return True
 
 
 @external
 def approve(spender: address, amount: uint256) -> bool:
     self.allowance[msg.sender][spender] = amount
-    log Approval(msg.sender, spender, amount)
+    log Approval(owner=msg.sender, spender=spender, value=amount)
     return True
 
 
@@ -62,7 +63,7 @@ def mint(receiver: address, amount: uint256):
     assert receiver != empty(address)
     self.totalSupply += amount
     self.balanceOf[receiver] += amount
-    log Transfer(empty(address), receiver, amount)
+    log Transfer(sender=empty(address), receiver=receiver, value=amount)
 
 
 @external

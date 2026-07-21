@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { Address } from 'viem';
 import Button from './Button';
@@ -29,6 +29,8 @@ export default function DisownButton({
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
+  const handledSuccessHash = useRef<string>();
+  const onSuccessRef = useRef(onSuccess);
 
   const handleDisown = () => {
     writeContract({
@@ -39,10 +41,15 @@ export default function DisownButton({
     setShowConfirm(false);
   };
 
-  // Call onSuccess when transaction is confirmed
-  if (isSuccess && onSuccess) {
-    onSuccess();
-  }
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  useEffect(() => {
+    if (!isSuccess || !hash || handledSuccessHash.current === hash) return;
+    handledSuccessHash.current = hash;
+    onSuccessRef.current?.();
+  }, [hash, isSuccess]);
 
   if (isSuccess && hash) {
     return (

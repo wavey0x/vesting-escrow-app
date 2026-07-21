@@ -12,7 +12,10 @@ This document captures the onchain contracts, indexer inputs, and app-side statu
   - `0xcf61782465Ff973638143d6492B51A85986aB347`
   - Deploy block: `19,739,664`
 
-The frontend uses the active factory constant in `src/lib/constants.ts`. The indexer scans both factory deployments.
+`config/deployments.json` is the shared runtime registry. The frontend resolves
+its create target from `activeFactory`, and the indexer scans every listed
+factory from its recorded deployment block. A factory's `version` is the
+highest escrow version it can create; historical factories remain version 1.
 
 ## VestingEscrowFactory
 
@@ -20,7 +23,7 @@ The deployed factories listed above create `VestingEscrowSimple` minimal
 proxies. The local unreleased factory has two immutable implementation targets:
 `TARGET` for the legacy behavior and `TARGET_V2` for vault-share vesting.
 
-Editable contract sources, tests, and Ape deployment tooling are vendored at
+Editable contract sources, tests, and Titanoboa deployment tooling are vendored at
 `packages/contracts/` from the upstream v0.3.0 release. See
 `packages/contracts/UPSTREAM.md` for provenance and
 `docs/architecture/contracts-development-and-deployment.md` for the change and
@@ -178,16 +181,20 @@ All Python indexer assets now live under `scripts/indexer/`:
 - `scripts/indexer/abi/VestingEscrowFactory.json`
 - `scripts/indexer/abi/VestingEscrowSimple.json`
 
-The ABI JSON files are indexer assets. The frontend uses inline ABI fragments
-for the contract calls it needs. They intentionally remain on the deployed
-legacy interface until a reviewed new factory address and deployment block are
-available. At rollout, add a versioned factory ABI and tag each indexed escrow
-with its mode; do not reinterpret historical escrows as ERC-4626 escrows.
+The ABI JSON files are indexer assets. The frontend's typed ABI fragments live
+in `src/lib/contracts.ts`. Both versions are already represented, but the
+registry keeps the deployed version 1 factory as the create target until a
+reviewed version 2 factory address and deployment block are available. The
+indexer marks a new escrow as version 2 only when it sees the matching
+`VestingEscrowV2Configured` event; creation events without that companion stay
+version 1.
 
-The contract package's compiler artifacts under `packages/contracts/.build/`
-are generated and ignored. If a contract change affects an ABI, regenerate the
-consumer ABIs from a reviewed build instead of allowing the frontend, indexer,
-and Vyper source to drift independently.
+Contract compilation is checked by `packages/contracts/scripts/compile.py`.
+The legacy implementation is compiled with Vyper 0.3.10 through VVM; the
+factory, V2 implementation, and mocks are pinned to Vyper 0.4.3 and Prague. If
+a contract change affects an ABI, regenerate the consumer ABIs from a reviewed
+build instead of allowing the frontend, indexer, and Vyper source to drift
+independently.
 
 ## Index Outputs
 
@@ -199,8 +206,15 @@ Generated files:
 The indexer stores:
 
 - indexed escrow creation events
+- an explicit version for newly discovered escrows
+- version 2 asset, yield recipient, and principal fields from the companion event
 - last indexed block per factory
 - token metadata and preferred logo URL
+
+The create flow also stores a confirmed escrow in a seven-day local pending
+cache. This closes the gap between transaction confirmation and the scheduled
+public index refresh. Indexed data takes precedence as soon as the address
+appears in `public/data/escrows.json`.
 
 ## Runtime Data Sources
 
@@ -216,4 +230,7 @@ The indexer stores:
 - supports manual dispatch
 - creates a Python virtualenv
 - refreshes `public/data/*.json`
-- commits updated index files back to the repo
+- commits any updated index or token metadata files back to the repo
+
+`.github/workflows/app-test.yml` runs frontend lint/tests/build and the pure
+indexer integration tests for application changes.

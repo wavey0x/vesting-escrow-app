@@ -1,94 +1,39 @@
 import { useReadContracts } from 'wagmi';
 import { Address } from 'viem';
-import { LiveEscrowData } from '../lib/types';
+import { EscrowVersion, LiveEscrowData } from '../lib/types';
+import { escrowReadAbi } from '../lib/contracts';
 
-const escrowAbi = [
-  {
-    name: 'unclaimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'locked',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'total_claimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'total_locked',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'owner',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    name: 'disabled_at',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'end_time',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'start_time',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'cliff_length',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'open_claim',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bool' }],
-  },
+const COMMON_FUNCTIONS = [
+  'unclaimed',
+  'locked',
+  'total_claimed',
+  'total_locked',
+  'owner',
+  'disabled_at',
+  'end_time',
+  'start_time',
+  'cliff_length',
+  'open_claim',
 ] as const;
 
-export function useLiveEscrowData(escrowAddress?: string) {
+const V2_FUNCTIONS = [
+  'claimable_yield',
+  'asset',
+  'yield_recipient',
+  'total_principal',
+  'principal_claimed',
+] as const;
+
+export function useLiveEscrowData(escrowAddress?: string, version: EscrowVersion = 1) {
+  const functionNames = version === 2
+    ? [...COMMON_FUNCTIONS, ...V2_FUNCTIONS]
+    : COMMON_FUNCTIONS;
   const contracts = escrowAddress
-    ? [
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'unclaimed' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'locked' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'total_claimed' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'total_locked' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'owner' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'disabled_at' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'end_time' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'start_time' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'cliff_length' },
-        { address: escrowAddress as Address, abi: escrowAbi, functionName: 'open_claim' },
-      ]
+    ? functionNames.map((functionName) => ({
+        address: escrowAddress as Address,
+        abi: escrowReadAbi,
+        functionName,
+      }))
     : [];
 
   const { data, isLoading, isFetching, error, refetch } = useReadContracts({
@@ -112,6 +57,13 @@ export function useLiveEscrowData(escrowAddress?: string) {
       startTime: data[7].result as bigint,
       cliffLength: data[8].result as bigint,
       openClaim: data[9].result as boolean,
+      ...(version === 2 && {
+        claimableYield: data[10].result as bigint,
+        asset: data[11].result as string,
+        yieldRecipient: data[12].result as string,
+        totalPrincipal: data[13].result as bigint,
+        principalClaimed: data[14].result as bigint,
+      }),
     };
   }
 

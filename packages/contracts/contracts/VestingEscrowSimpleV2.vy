@@ -1,4 +1,5 @@
-# @version 0.3.10
+#pragma version 0.4.3
+#pragma evm-version prague
 
 """
 @title Vesting Escrow Simple V2
@@ -7,7 +8,7 @@
 @notice Vests the principal value of ERC-4626 shares and sends yield to the original owner
 """
 
-from vyper.interfaces import ERC20
+from ethereum.ercs import IERC20
 
 
 interface ERC4626:
@@ -65,7 +66,7 @@ state: public(uint8)
 factory: address
 
 
-@external
+@deploy
 def __init__():
     # Ensure the implementation contract cannot be initialized.
     self.state = READY
@@ -88,7 +89,7 @@ def initialize(
     """
     assert self.state == 0  # dev: can only initialize once
 
-    asset: address = token.asset()
+    asset: address = staticcall token.asset()
     assert asset != empty(address)  # dev: invalid asset
     assert owner not in [empty(address), self, token.address, asset, msg.sender]  # dev: invalid yield owner
 
@@ -117,10 +118,10 @@ def finalize_funding() -> uint256:
     """
     assert self.state == UNFUNDED and msg.sender == self.factory  # dev: not factory
 
-    balance: uint256 = self.token.balanceOf(self)
+    balance: uint256 = staticcall self.token.balanceOf(self)
     assert balance == self.total_locked  # dev: incorrect funding
 
-    principal: uint256 = self.token.convertToAssets(balance)
+    principal: uint256 = staticcall self.token.convertToAssets(balance)
     assert principal > 0  # dev: zero principal
 
     self.total_principal = principal
@@ -142,7 +143,7 @@ def _mul_div_down(x: uint256, y: uint256, denominator: uint256) -> uint256:
     product_high: uint256 = unsafe_sub(unsafe_sub(mm, product_low), convert(mm < product_low, uint256))
 
     if product_high == 0:
-        return product_low / denominator
+        return product_low // denominator
 
     assert denominator > product_high  # dev: mulDiv overflow
 
@@ -151,8 +152,8 @@ def _mul_div_down(x: uint256, y: uint256, denominator: uint256) -> uint256:
     product_low = unsafe_sub(product_low, remainder)
 
     twos: uint256 = denominator & unsafe_sub(0, denominator)
-    denominator = denominator / twos
-    product_low = product_low / twos
+    denominator = denominator // twos
+    product_low = product_low // twos
     twos = unsafe_add(unsafe_div(unsafe_sub(0, twos), twos), 1)
     product_low = product_low | unsafe_mul(product_high, twos)
 
@@ -198,11 +199,11 @@ def _claimable_principal(time: uint256) -> uint256:
 @internal
 @view
 def _split(remaining: uint256) -> (uint256, uint256):
-    balance: uint256 = self.token.balanceOf(self)
+    balance: uint256 = staticcall self.token.balanceOf(self)
     if remaining == 0:
         return 0, balance
 
-    value: uint256 = self.token.convertToAssets(balance)
+    value: uint256 = staticcall self.token.convertToAssets(balance)
     if value <= remaining:
         return balance, 0
 
@@ -234,7 +235,8 @@ def _unclaimed_shares(time: uint256) -> uint256:
 @internal
 @view
 def _assert_solvent(remaining: uint256):
-    assert self.token.convertToAssets(self.token.balanceOf(self)) >= remaining  # dev: principal insolvent
+    balance: uint256 = staticcall self.token.balanceOf(self)
+    assert staticcall self.token.convertToAssets(balance) >= remaining  # dev: principal insolvent
 
 
 @external
@@ -275,7 +277,7 @@ def claimable_yield() -> uint256:
 
 
 @external
-@nonreentrant("lock")
+@nonreentrant
 def claim(beneficiary: address = msg.sender) -> uint256:
     """
     @notice Claim all currently vested principal as vault shares
@@ -296,19 +298,19 @@ def claim(beneficiary: address = msg.sender) -> uint256:
     self.total_claimed += claim_shares
 
     if claim_shares > 0:
-        assert self.token.transfer(beneficiary, claim_shares, default_return_value=True)
+        assert extcall self.token.transfer(beneficiary, claim_shares, default_return_value=True)
     if yield_shares > 0:
-        assert self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
+        assert extcall self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
         self._assert_solvent(remaining - claimable)
 
-    log Claim(beneficiary, claim_shares)
+    log Claim(recipient=beneficiary, claimed=claim_shares)
     if yield_shares > 0:
-        log YieldClaim(self.yield_recipient, yield_shares)
+        log YieldClaim(recipient=self.yield_recipient, claimed=yield_shares)
     return claim_shares
 
 
 @external
-@nonreentrant("lock")
+@nonreentrant
 def claim_yield() -> uint256:
     """
     @notice Send all current yield to the fixed yield recipient
@@ -321,14 +323,14 @@ def claim_yield() -> uint256:
     ignored_principal, yield_shares = self._split(remaining)
 
     if yield_shares > 0:
-        assert self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
+        assert extcall self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
         self._assert_solvent(remaining)
-        log YieldClaim(self.yield_recipient, yield_shares)
+        log YieldClaim(recipient=self.yield_recipient, claimed=yield_shares)
     return yield_shares
 
 
 @external
-@nonreentrant("lock")
+@nonreentrant
 def revoke(ts: uint256 = block.timestamp, beneficiary: address = msg.sender):
     owner: address = self.owner
     assert self.state == READY  # dev: not funded
@@ -347,13 +349,13 @@ def revoke(ts: uint256 = block.timestamp, beneficiary: address = msg.sender):
     self.owner = empty(address)
 
     if clawback_shares > 0:
-        assert self.token.transfer(beneficiary, clawback_shares, default_return_value=True)
+        assert extcall self.token.transfer(beneficiary, clawback_shares, default_return_value=True)
     if yield_shares > 0:
-        assert self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
+        assert extcall self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
         self._assert_solvent(recipient_remaining)
 
-    log Disowned(owner)
-    log Revoked(self.recipient, owner, clawback_shares, ts)
+    log Disowned(owner=owner)
+    log Revoked(recipient=self.recipient, owner=owner, rugged=clawback_shares, ts=ts)
 
 
 @external
@@ -362,7 +364,7 @@ def disown():
     owner: address = self.owner
     assert msg.sender == owner  # dev: not owner
     self.owner = empty(address)
-    log Disowned(owner)
+    log Disowned(owner=owner)
 
 
 @external
@@ -370,16 +372,16 @@ def set_open_claim(open_claim: bool):
     assert self.state == READY  # dev: not funded
     assert msg.sender == self.recipient  # dev: not recipient
     self.open_claim = open_claim
-    log SetOpenClaim(open_claim)
+    log SetOpenClaim(state=open_claim)
 
 
 @external
-@nonreentrant("lock")
-def collect_dust(token: ERC20, beneficiary: address = msg.sender):
+@nonreentrant
+def collect_dust(token: IERC20, beneficiary: address = msg.sender):
     assert self.state == READY  # dev: not funded
     assert token.address != self.token.address  # dev: use claim_yield
     recipient: address = self.recipient
     assert msg.sender == recipient or self.open_claim and recipient == beneficiary  # dev: not authorized
 
-    amount: uint256 = token.balanceOf(self)
-    assert token.transfer(beneficiary, amount, default_return_value=True)
+    amount: uint256 = staticcall token.balanceOf(self)
+    assert extcall token.transfer(beneficiary, amount, default_return_value=True)

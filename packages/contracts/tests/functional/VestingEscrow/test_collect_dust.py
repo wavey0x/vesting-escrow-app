@@ -1,4 +1,6 @@
-import ape
+import boa
+
+from tests.helpers import at, deploy, events
 
 
 def test_claim_non_vested_token(vesting, owner, recipient, another_token, another_amount):
@@ -9,12 +11,14 @@ def test_claim_non_vested_token(vesting, owner, recipient, another_token, anothe
 
 
 def test_collect_dust_zero_vested_token(vesting, recipient, token):
-    receipt = vesting.collect_dust(token, sender=recipient)
+    vesting.collect_dust(token, sender=recipient)
 
-    transfers = token.Transfer.from_receipt(receipt)
+    transfers = events(vesting, "Transfer")
 
     assert len(transfers) == 1
-    assert transfers[0] == token.Transfer(vesting, recipient, 0)
+    assert transfers[0].sender == vesting.address
+    assert transfers[0].receiver == recipient
+    assert transfers[0].value == 0
 
 
 def test_collect_dust_some_vested_token(chain, vesting, owner, recipient, token, amount, start_time, end_time):
@@ -33,14 +37,15 @@ def test_collect_dust_some_vested_token_and_claimed(
 
     token.transfer(vesting, amount, sender=owner)
     chain.pending_timestamp += (end_time - start_time) // 2
-    receipt = vesting.claim(sender=recipient)
-    claimed_amount = receipt.return_value
+    claimed_amount = vesting.claim(sender=recipient)
 
-    receipt = vesting.collect_dust(token, sender=recipient)
+    vesting.collect_dust(token, sender=recipient)
 
-    transfers = token.Transfer.from_receipt(receipt)
+    transfers = events(vesting, "Transfer")
     assert len(transfers) == 1
-    assert transfers[0] == token.Transfer(vesting, recipient, amount)
+    assert transfers[0].sender == vesting.address
+    assert transfers[0].receiver == recipient
+    assert transfers[0].value == amount
 
     assert token.balanceOf(recipient) == amount + claimed_amount
 
@@ -66,11 +71,13 @@ def test_collect_dust_after_revoke(chain, vesting, owner, recipient, token, amou
     vesting.revoke(ts, sender=owner)
 
     token.transfer(vesting, amount, sender=owner)
-    receipt = vesting.collect_dust(token, sender=recipient)
+    vesting.collect_dust(token, sender=recipient)
 
-    transfers = token.Transfer.from_receipt(receipt)
+    transfers = events(vesting, "Transfer")
     assert len(transfers) == 1
-    assert transfers[0] == token.Transfer(vesting, recipient, amount)
+    assert transfers[0].sender == vesting.address
+    assert transfers[0].receiver == recipient
+    assert transfers[0].value == amount
     assert token.balanceOf(recipient) == amount
 
     chain.pending_timestamp = end_time
@@ -80,7 +87,6 @@ def test_collect_dust_after_revoke(chain, vesting, owner, recipient, token, amou
 
 
 def test_collect_dust_cannot_make_vested_token_insolvent(
-    project,
     vesting_factory,
     owner,
     recipient,
@@ -90,11 +96,11 @@ def test_collect_dust_cannot_make_vested_token_insolvent(
     cliff_duration,
     open_claim,
 ):
-    token = owner.deploy(project.AdversarialToken)
+    token = deploy("test/AdversarialToken", sender=owner)
     excess = amount // 10
     token.mint(owner, amount, sender=owner)
     token.approve(vesting_factory, amount, sender=owner)
-    receipt = vesting_factory.deploy_vesting_contract(
+    escrow = vesting_factory.deploy_vesting_contract(
         token,
         recipient,
         amount,
@@ -106,14 +112,14 @@ def test_collect_dust_cannot_make_vested_token_insolvent(
         owner,
         sender=owner,
     )
-    vesting = project.VestingEscrowSimple.at(receipt.return_value)
+    vesting = at("VestingEscrowSimple", escrow)
 
     token.mint(vesting, excess, sender=owner)
     token.configure(vesting, 1, sender=owner)
     escrow_balance = token.balanceOf(vesting)
     recipient_balance = token.balanceOf(recipient)
 
-    with ape.reverts():
+    with boa.reverts():
         vesting.collect_dust(token, sender=recipient)
 
     assert token.balanceOf(vesting) == escrow_balance

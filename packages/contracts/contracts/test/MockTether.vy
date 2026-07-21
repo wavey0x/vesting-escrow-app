@@ -1,8 +1,9 @@
-# @version 0.3.10
+#pragma version 0.4.3
+#pragma evm-version prague
 # @dev token with a missing return value
-from vyper.interfaces import ERC20
+from ethereum.ercs import IERC20
 
-implements: ERC20
+implements: IERC20
 
 
 event Transfer:
@@ -25,7 +26,7 @@ totalSupply: public(uint256)
 def transfer(receiver: address, amount: uint256):
     self.balanceOf[msg.sender] -= amount
     self.balanceOf[receiver] += amount
-    log Transfer(msg.sender, receiver, amount)
+    log Transfer(sender=msg.sender, receiver=receiver, value=amount)
 
 
 @external
@@ -33,13 +34,13 @@ def transferFrom(owner: address, receiver: address, amount: uint256):
     self.balanceOf[owner] -= amount
     self.balanceOf[receiver] += amount
     self.allowance[owner][msg.sender] -= amount
-    log Transfer(owner, receiver, amount)
+    log Transfer(sender=owner, receiver=receiver, value=amount)
 
 
 @external
 def approve(spender: address, amount: uint256):
     self.allowance[msg.sender][spender] = amount
-    log Approval(msg.sender, spender, amount)
+    log Approval(owner=msg.sender, spender=spender, value=amount)
 
 
 @external
@@ -47,4 +48,4 @@ def mint(receiver: address, amount: uint256):
     assert receiver != empty(address)
     self.totalSupply += amount
     self.balanceOf[receiver] += amount
-    log Transfer(empty(address), receiver, amount)
+    log Transfer(sender=empty(address), receiver=receiver, value=amount)

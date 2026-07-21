@@ -1,4 +1,4 @@
-import ape
+import boa
 
 
 def test_vesting_reinit(
@@ -12,7 +12,7 @@ def test_vesting_reinit(
     cliff_duration,
     open_claim,
 ):
-    with ape.reverts(dev_message="dev: can only initialize once"):
+    with boa.reverts():
         vesting.initialize(
             owner,
             token,

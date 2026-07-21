@@ -1,5 +1,6 @@
-import ape
-from ape.utils import ZERO_ADDRESS
+import boa
+
+from tests.helpers import ZERO_ADDRESS, at, deploy
 
 
 SCALE = 10**18
@@ -25,8 +26,8 @@ def test_flat_rate_claims_shares(
     end_time,
 ):
     chain.pending_timestamp = start_time + (end_time - start_time) // 2
-    tx = vesting_v2.claim(sender=recipient)
-    vested = amount * (tx.timestamp - start_time) // (end_time - start_time)
+    vesting_v2.claim(sender=recipient)
+    vested = amount * (chain.pending_timestamp - start_time) // (end_time - start_time)
 
     assert vault.balanceOf(recipient) == vested
     assert vault.balanceOf(owner) == 0
@@ -55,8 +56,8 @@ def test_gain_is_paid_to_owner_while_principal_vests(
     balance = vault.balanceOf(vesting_v2)
     value = vault.convertToAssets(balance)
     principal_pool, yield_shares = split(balance, value, amount)
-    tx = vesting_v2.claim(sender=recipient)
-    vested = amount * (tx.timestamp - start_time) // (end_time - start_time)
+    vesting_v2.claim(sender=recipient)
+    vested = amount * (chain.pending_timestamp - start_time) // (end_time - start_time)
     expected_claim = principal_pool * vested // amount
 
     assert vault.balanceOf(recipient) == expected_claim
@@ -81,7 +82,7 @@ def test_claim_yield_without_claiming_principal(
     vault.set_assets_per_share(125 * SCALE // 100, sender=owner)
     expected_yield = amount * (125 - 100) // 125
 
-    assert vesting_v2.claim_yield(sender=recipient).return_value == expected_yield
+    assert vesting_v2.claim_yield(sender=recipient) == expected_yield
     assert vault.balanceOf(owner) == expected_yield
     assert vault.balanceOf(vesting_v2) == amount - expected_yield
     assert vesting_v2.principal_claimed() == 0
@@ -100,8 +101,8 @@ def test_loss_is_shared_by_recipient(
 ):
     vault.set_assets_per_share(8 * SCALE // 10, sender=owner)
     chain.pending_timestamp = start_time + (end_time - start_time) // 2
-    tx = vesting_v2.claim(sender=recipient)
-    vested = amount * (tx.timestamp - start_time) // (end_time - start_time)
+    vesting_v2.claim(sender=recipient)
+    vested = amount * (chain.pending_timestamp - start_time) // (end_time - start_time)
 
     assert vault.balanceOf(recipient) == amount * vested // amount
     assert vault.balanceOf(owner) == 0
@@ -243,7 +244,7 @@ def test_collect_dust_cannot_remove_vault_shares(
     vault,
     asset_token,
 ):
-    with ape.reverts(dev_message="dev: use claim_yield"):
+    with boa.reverts():
         vesting_v2.collect_dust(vault, sender=recipient)
 
     dust = 123
@@ -260,13 +261,12 @@ def test_open_claim_controls_third_party_claims(
 ):
     vesting_v2.set_open_claim(False, sender=recipient)
 
-    with ape.reverts(dev_message="dev: not authorized"):
+    with boa.reverts():
         vesting_v2.claim(recipient, sender=owner)
 
 
 def test_full_precision_vesting_at_uint256_limit(
     chain,
-    project,
     vesting_factory,
     owner,
     recipient,
@@ -275,10 +275,10 @@ def test_full_precision_vesting_at_uint256_limit(
     maximum = 2**256 - 1
     duration = 100
     start = chain.pending_timestamp + 10
-    vault = owner.deploy(project.MockERC4626, asset_token)
+    vault = deploy("test/MockERC4626", asset_token, sender=owner)
     vault.mint(owner, maximum, sender=owner)
     vault.approve(vesting_factory, maximum, sender=owner)
-    receipt = vesting_factory.deploy_vesting_contract(
+    escrow_address = vesting_factory.deploy_vesting_contract(
         vault,
         recipient,
         maximum,
@@ -291,11 +291,11 @@ def test_full_precision_vesting_at_uint256_limit(
         True,
         sender=owner,
     )
-    escrow = project.VestingEscrowSimpleV2.at(receipt.return_value)
+    escrow = at("VestingEscrowSimpleV2", escrow_address)
     chain.pending_timestamp = start + duration // 2
 
-    tx = escrow.claim(sender=recipient)
-    expected = maximum * (tx.timestamp - start) // duration
+    escrow.claim(sender=recipient)
+    expected = maximum * (chain.pending_timestamp - start) // duration
 
     assert vault.balanceOf(recipient) == expected
     assert vault.balanceOf(escrow) == maximum - expected

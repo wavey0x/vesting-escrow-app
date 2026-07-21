@@ -11,6 +11,10 @@ It also adds an explicit ERC-4626 share mode with a separate implementation
 target. See [`UPSTREAM.md`](UPSTREAM.md) for exact provenance and bytecode
 validation.
 
+Development uses Titanoboa 0.2.8. The factory, V2 implementation, and mocks
+compile with Vyper 0.4.3 for Prague. The deployed legacy implementation remains
+on Vyper 0.3.10 and is compiled through Titanoboa's VVM integration.
+
 A modified version of [Curve Vesting Escrow](https://github.com/curvefi/curve-dao-contracts) contracts with added functionality:
 
 - An escrow can have a `start_date` in the past.
@@ -35,9 +39,10 @@ A modified version of [Curve Vesting Escrow](https://github.com/curvefi/curve-da
 
 ```sh
 ./setup-python.sh
-.venv/bin/ape compile --size
-.venv/bin/ape test tests/functional/ --gas --coverage
-.venv/bin/ape test tests/integration/ -s
+.venv/bin/python scripts/compile.py
+.venv/bin/pytest tests/functional/ --gas-profile
+.venv/bin/pytest tests/integration/
+MAINNET_RPC=https://... MAINNET_BLOCK=... .venv/bin/python scripts/fork_smoke.py
 ```
 
 Regenerate the locked dependency set after changing `requirements.in`:
@@ -46,14 +51,40 @@ Regenerate the locked dependency set after changing `requirements.in`:
 ./update-lock.sh
 ```
 
-### Mainnet console
+### Network deployment
 
 ```python
-$ ape console --network mainnet
-funder = accounts.load(name)
-factory = project.VestingEscrowFactory.at('0x200C92Dd85730872Ab6A1e7d5E40A067066257cF')
-factory.deploy_vesting_contract(token, recipient, amount, vesting_duration, vesting_start, cliff_length, open_claim, support_vyper, owner, sender=funder)
+import os
+
+import boa
+from eth_account import Account
+
+boa.set_network_env(os.environ["MAINNET_RPC"])
+funder = Account.from_key(os.environ["DEPLOYER_PRIVATE_KEY"])
+boa.env.add_account(funder, force_eoa=True)
+
+factory = boa.load_partial("contracts/VestingEscrowFactory.vy").at(
+    "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF"
+)
+factory.deploy_vesting_contract(
+    token,
+    recipient,
+    amount,
+    vesting_duration,
+    vesting_start,
+    cliff_length,
+    open_claim,
+    support_vyper,
+    owner,
+    sender=funder.address,
+)
 ```
+
+`scripts/deploy_empty.py` provides the equivalent development deployment flow
+for the two targets and factory. It supports an expected-chain-ID check for
+reviewed network use and never accepts a private key on the command line. It is
+not yet the hardened production deployment workflow described in the rollout
+plan.
 
 The deployed v0.3.0 factory above only supports the legacy nine-argument call.
 For the unreleased factory, pass `yield_to_owner=True` as the final argument to

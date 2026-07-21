@@ -190,7 +190,11 @@ export function mergeEscrowData(
   indexed: IndexedEscrow,
   live?: LiveEscrowData
 ): Escrow {
-  const escrow: Escrow = { ...indexed, live };
+  const escrow: Escrow = {
+    ...indexed,
+    live,
+    openClaim: live?.openClaim ?? indexed.openClaim,
+  };
   escrow.status = getEscrowStatus(escrow);
   return escrow;
 }

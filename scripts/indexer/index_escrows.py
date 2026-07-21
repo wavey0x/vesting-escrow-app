@@ -20,13 +20,7 @@ from pathlib import Path
 import requests
 from web3 import Web3
 
-# Constants
-FACTORIES = [
-    {"address": "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF", "deployBlock": 18_291_969},
-    {"address": "0xcf61782465Ff973638143d6492B51A85986aB347", "deployBlock": 19_739_664},
-]
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 100_000))
-CHAIN_ID = 1
 
 PREFERRED_LOGO_DOMAIN = "smold"  # Substring matched against logoUrl to identify preferred source
 
@@ -94,9 +88,40 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent.parent
 DATA_DIR = PROJECT_DIR / "public" / "data"
 ABI_DIR = SCRIPT_DIR / "abi"
+DEPLOYMENTS_FILE = PROJECT_DIR / "config" / "deployments.json"
 
 ESCROWS_FILE = DATA_DIR / "escrows.json"
 TOKENS_FILE = DATA_DIR / "tokens.json"
+
+
+def load_deployments() -> dict:
+    """Load the shared frontend/indexer deployment registry."""
+    with open(DEPLOYMENTS_FILE) as f:
+        deployments = json.load(f)
+
+    if deployments.get("chainId") != 1:
+        raise ValueError("config/deployments.json must target Ethereum mainnet")
+
+    for factory in deployments["factories"]:
+        if not Web3.is_address(factory["address"]):
+            raise ValueError(f"invalid factory address: {factory['address']}")
+        if factory["version"] not in (1, 2):
+            raise ValueError(f"unsupported factory version: {factory['version']}")
+        if factory["deployBlock"] < 0:
+            raise ValueError("factory deployBlock cannot be negative")
+
+    active_factory = deployments["activeFactory"].lower()
+    configured = {factory["address"].lower() for factory in deployments["factories"]}
+    if len(configured) != len(deployments["factories"]):
+        raise ValueError("config/deployments.json contains a duplicate factory")
+    if active_factory not in configured:
+        raise ValueError("activeFactory is not present in config/deployments.json")
+    return deployments
+
+
+DEPLOYMENTS = load_deployments()
+FACTORIES = DEPLOYMENTS["factories"]
+CHAIN_ID = DEPLOYMENTS["chainId"]
 
 
 def load_factory_abi() -> list:
@@ -132,7 +157,11 @@ def load_existing_data() -> dict:
             "lastIndexed": None,
             "chainId": CHAIN_ID,
             "factories": {
-                f["address"]: {"deployBlock": f["deployBlock"], "lastBlock": f["deployBlock"] - 1}
+                f["address"]: {
+                    "deployBlock": f["deployBlock"],
+                    "lastBlock": f["deployBlock"] - 1,
+                    "version": f["version"],
+                }
                 for f in FACTORIES
             },
             "escrows": [],
@@ -157,7 +186,10 @@ def load_existing_data() -> dict:
             data.setdefault("factories", {})[factory["address"]] = {
                 "deployBlock": factory["deployBlock"],
                 "lastBlock": factory["deployBlock"] - 1,
+                "version": factory["version"],
             }
+        else:
+            data["factories"][factory["address"]].setdefault("version", factory["version"])
 
     return data
 
@@ -180,6 +212,7 @@ def event_to_escrow(event, factory_address: str) -> dict:
     return {
         "address": args["escrow"],
         "factory": factory_address,
+        "version": 1,
         "funder": args["funder"],
         "token": args["token"].lower(),  # lowercase for consistency
         "recipient": args["recipient"],
@@ -193,13 +226,45 @@ def event_to_escrow(event, factory_address: str) -> dict:
     }
 
 
-def fetch_events(contract, from_block: int, to_block: int, factory_address: str) -> list:
-    """Fetch VestingEscrowCreated events using contract interface."""
-    events = contract.events.VestingEscrowCreated.get_logs(
+def configuration_event_to_metadata(event) -> dict:
+    """Convert the companion V2 event into fields attached to its creation event."""
+    args = event["args"]
+    return {
+        "address": args["escrow"],
+        "version": 2,
+        "asset": args["asset"],
+        "yieldRecipient": args["yield_recipient"],
+        "principal": str(args["principal"]),
+    }
+
+
+def merge_configuration_events(escrows: list, configurations: list) -> list:
+    """Mark only escrows positively identified by a V2 companion event."""
+    by_address = {item["address"].lower(): item for item in configurations}
+    for escrow in escrows:
+        configuration = by_address.get(escrow["address"].lower())
+        if configuration:
+            escrow.update({key: value for key, value in configuration.items() if key != "address"})
+    return escrows
+
+
+def fetch_events(contract, from_block: int, to_block: int, factory: dict) -> list:
+    """Fetch creation events and attach V2 configuration when supported."""
+    created_events = contract.events.VestingEscrowCreated.get_logs(
         from_block=from_block,
         to_block=to_block
     )
-    return [event_to_escrow(e, factory_address) for e in events]
+    escrows = [event_to_escrow(event, factory["address"]) for event in created_events]
+
+    if factory["version"] < 2:
+        return escrows
+
+    configured_events = contract.events.VestingEscrowV2Configured.get_logs(
+        from_block=from_block,
+        to_block=to_block,
+    )
+    configurations = [configuration_event_to_metadata(event) for event in configured_events]
+    return merge_configuration_events(escrows, configurations)
 
 
 DEFAULT_TOKEN_METADATA = {
@@ -240,20 +305,21 @@ def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
         return dict(DEFAULT_TOKEN_METADATA)
 
 
-def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_block: int, existing_addresses: set) -> set:
+def index_factory(contract, data: dict, factory: dict, current_block: int, existing_addresses: set) -> set:
     """
     Index new escrows from a single factory.
     Returns set of new token addresses found.
     Updates existing_addresses in place as new escrows are added.
     """
+    factory_address = factory["address"]
     factory_meta = data["factories"][factory_address]
     start_block = factory_meta["lastBlock"] + 1
 
-    if start_block >= current_block:
+    if start_block > current_block:
         print("  No new blocks to scan")
         return set()
 
-    total_blocks = current_block - start_block
+    total_blocks = current_block - start_block + 1
     num_chunks = (total_blocks + CHUNK_SIZE - 1) // CHUNK_SIZE
 
     print(f"  Scanning blocks {start_block:,} to {current_block:,} ({total_blocks:,} blocks, {num_chunks} chunks)")
@@ -270,7 +336,7 @@ def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_
         retries = 3
         for attempt in range(retries):
             try:
-                events = fetch_events(contract, chunk_start, chunk_end, factory_address)
+                events = fetch_events(contract, chunk_start, chunk_end, factory)
                 break
             except Exception as e:
                 if attempt < retries - 1:
@@ -282,9 +348,10 @@ def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_
 
         # Filter out duplicates and collect new escrows
         for escrow in events:
-            if escrow["address"] not in existing_addresses:
+            address_key = escrow["address"].lower()
+            if address_key not in existing_addresses:
                 new_escrows.append(escrow)
-                existing_addresses.add(escrow["address"])
+                existing_addresses.add(address_key)
                 new_tokens.add(escrow["token"])
 
         print(f"found {len(events)} events")
@@ -378,6 +445,8 @@ def main():
 
     # Initialize
     w3 = get_web3()
+    if w3.eth.chain_id != CHAIN_ID:
+        raise SystemExit(f"expected chain ID {CHAIN_ID}, connected to {w3.eth.chain_id}")
     abi = load_factory_abi()
     data = load_existing_data()
     tokens_data = load_existing_tokens()
@@ -389,14 +458,14 @@ def main():
     print(f"Existing escrows: {len(data['escrows'])}")
 
     all_new_tokens = set()
-    existing_addresses = {e["address"] for e in data["escrows"]}
+    existing_addresses = {e["address"].lower() for e in data["escrows"]}
     current_block = w3.eth.block_number
 
     for factory in FACTORIES:
         addr = factory["address"]
         print(f"\nIndexing factory {addr}...")
         contract = w3.eth.contract(address=addr, abi=abi)
-        new_tokens = index_factory(w3, contract, data, addr, current_block, existing_addresses)
+        new_tokens = index_factory(contract, data, factory, current_block, existing_addresses)
         all_new_tokens.update(new_tokens)
 
     data["lastIndexed"] = datetime.now(timezone.utc).isoformat()

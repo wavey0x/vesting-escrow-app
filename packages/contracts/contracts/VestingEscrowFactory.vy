@@ -1,4 +1,5 @@
-# @version 0.3.10
+#pragma version 0.4.3
+#pragma evm-version prague
 
 """
 @title Vesting Escrow Factory
@@ -7,13 +8,13 @@
 @notice Stores and distributes ERC20 tokens by deploying vesting escrow contracts
 """
 
-from vyper.interfaces import ERC20
+from ethereum.ercs import IERC20
 
 
 interface VestingEscrowSimple:
     def initialize(
         owner: address,
-        token: ERC20,
+        token: IERC20,
         recipient: address,
         amount: uint256,
         start_time: uint256,
@@ -26,7 +27,7 @@ interface VestingEscrowSimple:
 interface VestingEscrowSimpleV2:
     def initialize(
         owner: address,
-        token: ERC20,
+        token: IERC20,
         recipient: address,
         amount: uint256,
         start_time: uint256,
@@ -40,7 +41,7 @@ interface VestingEscrowSimpleV2:
 
 event VestingEscrowCreated:
     funder: indexed(address)
-    token: indexed(ERC20)
+    token: indexed(IERC20)
     recipient: indexed(address)
     escrow: address
     amount: uint256
@@ -64,7 +65,7 @@ escrows_length: public(uint256)
 escrows: public(address[1000000000000])
 
 
-@external
+@deploy
 def __init__(target: address, target_v2: address, vyper_donate: address):
     """
     @notice Contract constructor
@@ -81,7 +82,7 @@ def __init__(target: address, target_v2: address, vyper_donate: address):
 
 @external
 def deploy_vesting_contract(
-    token: ERC20,
+    token: IERC20,
     recipient: address,
     amount: uint256,
     vesting_duration: uint256,
@@ -117,7 +118,7 @@ def deploy_vesting_contract(
     escrow: address = create_minimal_proxy_to(target)
 
     if yield_to_owner:
-        VestingEscrowSimpleV2(escrow).initialize(
+        extcall VestingEscrowSimpleV2(escrow).initialize(
             owner,
             token,
             recipient,
@@ -128,7 +129,7 @@ def deploy_vesting_contract(
             open_claim,
         )
     else:
-        VestingEscrowSimple(escrow).initialize(
+        extcall VestingEscrowSimple(escrow).initialize(
             owner,
             token,
             recipient,
@@ -139,37 +140,38 @@ def deploy_vesting_contract(
             open_claim,
         )
     # skip transferFrom and approve and send directly to escrow
-    assert token.transferFrom(msg.sender, escrow, amount, default_return_value=True)  # dev: funding failed
+    assert extcall token.transferFrom(msg.sender, escrow, amount, default_return_value=True)  # dev: funding failed
 
     if yield_to_owner:
-        principal: uint256 = VestingEscrowSimpleV2(escrow).finalize_funding()
+        principal: uint256 = extcall VestingEscrowSimpleV2(escrow).finalize_funding()
+        asset: address = staticcall VestingEscrowSimpleV2(escrow).asset()
         log VestingEscrowV2Configured(
-            escrow,
-            VestingEscrowSimpleV2(escrow).asset(),
-            owner,
-            principal,
+            escrow=escrow,
+            asset=asset,
+            yield_recipient=owner,
+            principal=principal,
         )
 
     if support_vyper > 0:
         assert VYPER != empty(address)  # dev: lost donation
-        assert token.transferFrom(
+        assert extcall token.transferFrom(
             msg.sender,
             VYPER,
-            amount * support_vyper / 10_000,
+            amount * support_vyper // 10_000,
             default_return_value=True
         )  # dev: donation failed
 
     self.escrows[self.escrows_length] = escrow
     self.escrows_length += 1
     log VestingEscrowCreated(
-        msg.sender,
-        token,
-        recipient,
-        escrow,
-        amount,
-        vesting_start,
-        vesting_duration,
-        cliff_length,
-        open_claim,
+        funder=msg.sender,
+        token=token,
+        recipient=recipient,
+        escrow=escrow,
+        amount=amount,
+        vesting_start=vesting_start,
+        vesting_duration=vesting_duration,
+        cliff_length=cliff_length,
+        open_claim=open_claim,
     )
     return escrow

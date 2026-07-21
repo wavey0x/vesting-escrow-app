@@ -1,19 +1,20 @@
 import pytest
 
-
-@pytest.fixture(scope="module")
-def asset_token(project, owner):
-    return owner.deploy(project.MockToken)
+from tests.helpers import at, deploy
 
 
 @pytest.fixture(scope="module")
-def vault(project, owner, asset_token):
-    return owner.deploy(project.MockERC4626, asset_token)
+def asset_token(owner):
+    return deploy("test/MockToken", sender=owner)
+
+
+@pytest.fixture(scope="module")
+def vault(owner, asset_token):
+    return deploy("test/MockERC4626", asset_token, sender=owner)
 
 
 @pytest.fixture
 def vesting_v2(
-    project,
     owner,
     recipient,
     vesting_factory,
@@ -26,7 +27,7 @@ def vesting_v2(
 ):
     vault.mint(owner, amount, sender=owner)
     vault.approve(vesting_factory, amount, sender=owner)
-    receipt = vesting_factory.deploy_vesting_contract(
+    escrow = vesting_factory.deploy_vesting_contract(
         vault,
         recipient,
         amount,
@@ -39,4 +40,4 @@ def vesting_v2(
         True,
         sender=owner,
     )
-    return project.VestingEscrowSimpleV2.at(receipt.return_value)
+    return at("VestingEscrowSimpleV2", escrow)

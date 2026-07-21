@@ -16,9 +16,9 @@ def test_claim_partial_copy(
 ):
     chain.pending_timestamp += sleep_time
 
-    tx = vesting.claim(sender=recipient)
-    if tx.timestamp - start_time > cliff_duration:
-        expected_amount = amount * (tx.timestamp - start_time) // (end_time - start_time)
+    vesting.claim(sender=recipient)
+    if chain.pending_timestamp - start_time > cliff_duration:
+        expected_amount = amount * (chain.pending_timestamp - start_time) // (end_time - start_time)
     else:
         expected_amount = 0
 

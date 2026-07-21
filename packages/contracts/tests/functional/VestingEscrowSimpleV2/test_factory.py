@@ -1,9 +1,9 @@
-import ape
-from ape.utils import ZERO_ADDRESS
+import boa
+
+from tests.helpers import ZERO_ADDRESS, at, deploy, events
 
 
 def test_deploys_ready_v2_escrow(
-    project,
     vesting_factory,
     owner,
     recipient,
@@ -18,7 +18,7 @@ def test_deploys_ready_v2_escrow(
     vault.mint(owner, amount, sender=owner)
     vault.approve(vesting_factory, amount, sender=owner)
 
-    receipt = vesting_factory.deploy_vesting_contract(
+    escrow_address = vesting_factory.deploy_vesting_contract(
         vault,
         recipient,
         amount,
@@ -31,32 +31,28 @@ def test_deploys_ready_v2_escrow(
         True,
         sender=owner,
     )
-    escrow = project.VestingEscrowSimpleV2.at(receipt.return_value)
-    created = vesting_factory.VestingEscrowCreated.from_receipt(receipt)
-    configured = vesting_factory.VestingEscrowV2Configured.from_receipt(receipt)
+    escrow = at("VestingEscrowSimpleV2", escrow_address)
+    created = events(vesting_factory, "VestingEscrowCreated", include_child_logs=False)
+    configured = events(vesting_factory, "VestingEscrowV2Configured", include_child_logs=False)
 
     assert len(created) == 1
-    assert created[0] == vesting_factory.VestingEscrowCreated(
-        owner,
-        vault,
-        recipient,
-        escrow,
-        amount,
-        start_time,
-        duration,
-        cliff_duration,
-        open_claim,
-    )
+    assert created[0].funder == owner
+    assert created[0].token == vault.address
+    assert created[0].recipient == recipient
+    assert created[0].escrow == escrow.address
+    assert created[0].amount == amount
+    assert created[0].vesting_start == start_time
+    assert created[0].vesting_duration == duration
+    assert created[0].cliff_length == cliff_duration
+    assert created[0].open_claim == open_claim
     assert len(configured) == 1
-    assert configured[0] == vesting_factory.VestingEscrowV2Configured(
-        escrow,
-        asset_token,
-        owner,
-        amount,
-    )
+    assert configured[0].escrow == escrow.address
+    assert configured[0].asset == asset_token.address
+    assert configured[0].yield_recipient == owner
+    assert configured[0].principal == amount
     assert escrow.state() == 2
-    assert escrow.token() == vault
-    assert escrow.asset() == asset_token
+    assert escrow.token() == vault.address
+    assert escrow.asset() == asset_token.address
     assert escrow.owner() == owner
     assert escrow.yield_recipient() == owner
     assert escrow.total_locked() == amount
@@ -76,7 +72,7 @@ def test_legacy_default_does_not_emit_v2_event(
     token.mint(owner, amount, sender=owner)
     token.approve(vesting_factory, amount, sender=owner)
 
-    receipt = vesting_factory.deploy_vesting_contract(
+    vesting_factory.deploy_vesting_contract(
         token,
         recipient,
         amount,
@@ -85,7 +81,7 @@ def test_legacy_default_does_not_emit_v2_event(
         sender=owner,
     )
 
-    assert vesting_factory.VestingEscrowV2Configured.from_receipt(receipt) == []
+    assert events(vesting_factory, "VestingEscrowV2Configured", include_child_logs=False) == []
 
 
 def test_plain_erc20_cannot_use_v2_mode(
@@ -101,7 +97,7 @@ def test_plain_erc20_cannot_use_v2_mode(
     token.approve(vesting_factory, amount, sender=owner)
     length = vesting_factory.escrows_length()
 
-    with ape.reverts():
+    with boa.reverts():
         vesting_factory.deploy_vesting_contract(
             token,
             recipient,
@@ -133,7 +129,7 @@ def test_v2_mode_rejects_zero_yield_owner(
     vault.approve(vesting_factory, amount, sender=owner)
     length = vesting_factory.escrows_length()
 
-    with ape.reverts(dev_message="dev: invalid yield owner"):
+    with boa.reverts(dev="invalid yield owner"):
         vesting_factory.deploy_vesting_contract(
             vault,
             recipient,
@@ -166,7 +162,7 @@ def test_v2_mode_requires_exact_share_funding(
     vault.approve(vesting_factory, amount, sender=owner)
     length = vesting_factory.escrows_length()
 
-    with ape.reverts(dev_message="dev: incorrect funding"):
+    with boa.reverts(dev="incorrect funding"):
         vesting_factory.deploy_vesting_contract(
             vault,
             recipient,
@@ -186,7 +182,6 @@ def test_v2_mode_requires_exact_share_funding(
 
 
 def test_v2_mode_rejects_zero_initial_principal(
-    project,
     vesting_factory,
     owner,
     recipient,
@@ -194,12 +189,12 @@ def test_v2_mode_rejects_zero_initial_principal(
     duration,
     start_time,
 ):
-    vault = owner.deploy(project.MockERC4626, asset_token)
+    vault = deploy("test/MockERC4626", asset_token, sender=owner)
     vault.set_assets_per_share(1, sender=owner)
     vault.mint(owner, 1, sender=owner)
     vault.approve(vesting_factory, 1, sender=owner)
 
-    with ape.reverts(dev_message="dev: zero principal"):
+    with boa.reverts(dev="zero principal"):
         vesting_factory.deploy_vesting_contract(
             vault,
             recipient,
@@ -224,7 +219,7 @@ def test_implementation_cannot_be_initialized(
     duration,
     start_time,
 ):
-    with ape.reverts(dev_message="dev: can only initialize once"):
+    with boa.reverts(dev="can only initialize once"):
         vesting_v2_target.initialize(
             owner,
             vault,
@@ -237,5 +232,5 @@ def test_implementation_cannot_be_initialized(
             sender=owner,
         )
 
-    with ape.reverts(dev_message="dev: not factory"):
+    with boa.reverts(dev="not factory"):
         vesting_v2_target.finalize_funding(sender=owner)

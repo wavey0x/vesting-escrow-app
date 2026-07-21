@@ -10,7 +10,9 @@ if ! command -v "$python_bin" >/dev/null 2>&1; then
   exit 1
 fi
 
-"$python_bin" -m venv "$venv_dir"
+# Rebuild instead of layering dependencies over an older Ape environment. Ape
+# and Titanoboa both register pytest isolation hooks and cannot safely coexist.
+"$python_bin" -m venv --clear "$venv_dir"
 "$venv_dir/bin/python" -m pip install --upgrade pip
 "$venv_dir/bin/python" -m pip install -r "$contract_dir/requirements.txt"
 

@@ -1,4 +1,4 @@
-import ape
+import boa
 
 
 def test_claim_full(chain, vesting, recipient, token, amount, end_time):
@@ -13,7 +13,7 @@ def test_claim_less(chain, vesting, recipient, token, amount, end_time):
     chain.pending_timestamp = end_time
     vesting.claim(recipient, vesting.total_locked() // 10, sender=recipient)
 
-    assert token.balanceOf(recipient) == amount / 10
+    assert token.balanceOf(recipient) == amount // 10
 
 
 def test_claim_beneficiary(chain, vesting, recipient, cold_storage, token, amount, end_time):
@@ -33,7 +33,7 @@ def test_claim_recepient_beneficiary(chain, vesting, owner, recipient, token, am
 def test_claim_not_open(chain, vesting, owner, recipient, end_time):
     vesting.set_open_claim(False, sender=recipient)
     chain.pending_timestamp = end_time
-    with ape.reverts(dev_message="dev: not authorized"):
+    with boa.reverts():
         vesting.claim(recipient, sender=owner)
 
 
@@ -46,8 +46,8 @@ def test_claim_before_start(chain, vesting, recipient, token, start_time):
 
 def test_claim_partial(chain, vesting, recipient, token, start_time, end_time, cliff_duration):
     chain.pending_timestamp = start_time + 2 * cliff_duration
-    tx = vesting.claim(sender=recipient)
-    expected_amount = vesting.total_locked() * (tx.timestamp - start_time) // (end_time - start_time)
+    vesting.claim(sender=recipient)
+    expected_amount = vesting.total_locked() * (chain.pending_timestamp - start_time) // (end_time - start_time)
 
     assert token.balanceOf(recipient) == expected_amount
     assert vesting.total_claimed() == expected_amount
@@ -83,8 +83,8 @@ def test_claim_cliff(chain, vesting, recipient, token, start_time, end_time, cli
 
     chain.pending_timestamp = start_time + cliff_duration
 
-    tx = vesting.claim(sender=recipient)
-    expected_amount = vesting.total_locked() * (tx.timestamp - start_time) // (end_time - start_time)
+    vesting.claim(sender=recipient)
+    expected_amount = vesting.total_locked() * (chain.pending_timestamp - start_time) // (end_time - start_time)
 
     assert token.balanceOf(recipient) == expected_amount
     assert vesting.total_claimed() == expected_amount
