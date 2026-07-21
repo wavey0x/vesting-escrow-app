@@ -108,29 +108,6 @@ export function getAmountsBreakdown(escrow: Escrow): {
 }
 
 /**
- * Calculate time remaining until next milestone
- */
-export function getTimeToMilestone(escrow: Escrow): {
-  milestone: 'cliff' | 'vested' | 'none';
-  seconds: number;
-} {
-  const now = Math.floor(Date.now() / 1000);
-  const start = escrow.vestingStart;
-  const cliffEnd = start + escrow.cliffLength;
-  const vestingEnd = start + escrow.vestingDuration;
-
-  if (escrow.cliffLength > 0 && now < cliffEnd) {
-    return { milestone: 'cliff', seconds: cliffEnd - now };
-  }
-
-  if (now < vestingEnd) {
-    return { milestone: 'vested', seconds: vestingEnd - now };
-  }
-
-  return { milestone: 'none', seconds: 0 };
-}
-
-/**
  * Check if user can claim
  */
 export function canClaim(escrow: Escrow, userAddress?: string): boolean {

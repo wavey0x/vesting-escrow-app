@@ -165,8 +165,6 @@ Activation tasks after mainnet deployment:
 - add the new factory and exact deployment block to `config/deployments.json`;
 - set it as `activeFactory` only after the canary checks pass;
 - run the indexer to refresh `public/data/*.json` and review the generated diff.
-- Refresh `public/data/*.json` only through
-  `scripts/indexer/index_escrows.py`, then review the generated diff.
 
 Exit gate: after activation, the production build creates through the new
 factory and reads both new and historical escrows.

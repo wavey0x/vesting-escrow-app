@@ -1,5 +1,7 @@
 import {
   decodeEventLog,
+  parseAbi,
+  parseAbiItem,
   type Address,
   type Hex,
 } from 'viem';
@@ -30,233 +32,60 @@ if (!activeFactory) {
 
 export const ACTIVE_FACTORY: FactoryDeployment = activeFactory;
 
-export const vestingEscrowCreatedEvent = {
-  name: 'VestingEscrowCreated',
-  type: 'event',
-  inputs: [
-    { name: 'funder', type: 'address', indexed: true },
-    { name: 'token', type: 'address', indexed: true },
-    { name: 'recipient', type: 'address', indexed: true },
-    { name: 'escrow', type: 'address', indexed: false },
-    { name: 'amount', type: 'uint256', indexed: false },
-    { name: 'vesting_start', type: 'uint256', indexed: false },
-    { name: 'vesting_duration', type: 'uint256', indexed: false },
-    { name: 'cliff_length', type: 'uint256', indexed: false },
-    { name: 'open_claim', type: 'bool', indexed: false },
-  ],
-} as const;
+const CREATED_EVENT = 'event VestingEscrowCreated(address indexed funder, address indexed token, address indexed recipient, address escrow, uint256 amount, uint256 vesting_start, uint256 vesting_duration, uint256 cliff_length, bool open_claim)' as const;
+const V2_CONFIGURED_EVENT = 'event VestingEscrowV2Configured(address indexed escrow, address indexed asset, address indexed yield_recipient, uint256 principal)' as const;
 
-export const vestingEscrowV2ConfiguredEvent = {
-  name: 'VestingEscrowV2Configured',
-  type: 'event',
-  inputs: [
-    { name: 'escrow', type: 'address', indexed: true },
-    { name: 'asset', type: 'address', indexed: true },
-    { name: 'yield_recipient', type: 'address', indexed: true },
-    { name: 'principal', type: 'uint256', indexed: false },
-  ],
-} as const;
+export const vestingEscrowCreatedEvent = parseAbiItem(CREATED_EVENT);
+export const vestingEscrowV2ConfiguredEvent = parseAbiItem(V2_CONFIGURED_EVENT);
 
-export const factoryV1Abi = [
-  {
-    name: 'deploy_vesting_contract',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'token', type: 'address' },
-      { name: 'recipient', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'vesting_duration', type: 'uint256' },
-      { name: 'vesting_start', type: 'uint256' },
-      { name: 'cliff_length', type: 'uint256' },
-      { name: 'open_claim', type: 'bool' },
-      { name: 'support_vyper', type: 'uint256' },
-      { name: 'owner', type: 'address' },
-    ],
-    outputs: [{ type: 'address' }],
-  },
-  vestingEscrowCreatedEvent,
-] as const;
+export const factoryV1Abi = parseAbi([
+  'function deploy_vesting_contract(address token, address recipient, uint256 amount, uint256 vesting_duration, uint256 vesting_start, uint256 cliff_length, bool open_claim, uint256 support_vyper, address owner) returns (address)',
+  CREATED_EVENT,
+]);
 
-export const factoryV2Abi = [
-  {
-    name: 'deploy_vesting_contract',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'token', type: 'address' },
-      { name: 'recipient', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'vesting_duration', type: 'uint256' },
-      { name: 'vesting_start', type: 'uint256' },
-      { name: 'cliff_length', type: 'uint256' },
-      { name: 'open_claim', type: 'bool' },
-      { name: 'support_vyper', type: 'uint256' },
-      { name: 'owner', type: 'address' },
-      { name: 'yield_to_owner', type: 'bool' },
-    ],
-    outputs: [{ type: 'address' }],
-  },
-  vestingEscrowCreatedEvent,
-  vestingEscrowV2ConfiguredEvent,
-] as const;
+export const factoryV2Abi = parseAbi([
+  'function deploy_vesting_contract(address token, address recipient, uint256 amount, uint256 vesting_duration, uint256 vesting_start, uint256 cliff_length, bool open_claim, uint256 support_vyper, address owner, bool yield_to_owner) returns (address)',
+  CREATED_EVENT,
+  V2_CONFIGURED_EVENT,
+]);
 
-export const legacyClaimAbi = [
-  {
-    name: 'claim',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'beneficiary', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
+export const legacyClaimAbi = parseAbi([
+  'function claim(address beneficiary, uint256 amount) returns (uint256)',
+]);
 
-export const v2ClaimAbi = [
-  {
-    name: 'claim',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'beneficiary', type: 'address' }],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
+export const v2ClaimAbi = parseAbi([
+  'function claim(address beneficiary) returns (uint256)',
+]);
 
-export const v2YieldAbi = [
-  {
-    name: 'claim_yield',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
+export const v2YieldAbi = parseAbi([
+  'function claim_yield() returns (uint256)',
+]);
 
-export const escrowReadAbi = [
-  {
-    name: 'unclaimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'locked',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'total_claimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'total_locked',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'owner',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    name: 'disabled_at',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'end_time',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'start_time',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'cliff_length',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'open_claim',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bool' }],
-  },
-  {
-    name: 'claimable_yield',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'asset',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    name: 'yield_recipient',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    name: 'total_principal',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'principal_claimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-] as const;
+export const revokeAbi = parseAbi(['function revoke()']);
 
-export const revokeAbi = [
-  {
-    name: 'revoke',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [],
-    outputs: [],
-  },
-] as const;
+export const escrowReadAbi = parseAbi([
+  'function unclaimed() view returns (uint256)',
+  'function locked() view returns (uint256)',
+  'function total_claimed() view returns (uint256)',
+  'function total_locked() view returns (uint256)',
+  'function owner() view returns (address)',
+  'function disabled_at() view returns (uint256)',
+  'function end_time() view returns (uint256)',
+  'function start_time() view returns (uint256)',
+  'function cliff_length() view returns (uint256)',
+  'function open_claim() view returns (bool)',
+  'function claimable_yield() view returns (uint256)',
+  'function asset() view returns (address)',
+  'function yield_recipient() view returns (address)',
+  'function total_principal() view returns (uint256)',
+  'function principal_claimed() view returns (uint256)',
+]);
 
 export function requiredFunding(amount: bigint, donationBps: bigint): bigint {
   return amount + (amount * donationBps) / 10_000n;
 }
 
-export interface CreatedEscrowInput {
+interface CreatedEscrowInput {
   logs: readonly {
     address: Address;
     data: Hex;
@@ -283,6 +112,7 @@ export function decodeCreatedEscrow({
   for (const log of logs) {
     if (log.address.toLowerCase() !== factory.address.toLowerCase()) continue;
     if (!log.topics.every((topic): topic is Hex => typeof topic === 'string')) continue;
+
     const [signature, ...indexedArguments] = log.topics;
     if (!signature) continue;
 

@@ -33,10 +33,9 @@ their behavior and ABI remain compatible where documented, but their bytecode
 is intentionally different. These changes are unreleased and must not be
 overwritten during an upstream sync.
 
-The upstream `.github/workflows/test.yaml` file was intentionally omitted. A
-workflow nested below `packages/contracts/` is not executed by GitHub, and the
-historical dependency set needs to be made reproducible before enabling a root
-monorepo contract workflow.
+The upstream workflow was replaced by the root monorepo workflow. Its stale
+development spec and redundant local demo deployment were omitted; the current
+architecture and rollout documents are canonical.
 
 ## Sync procedure
 

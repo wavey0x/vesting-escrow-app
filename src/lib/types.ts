@@ -90,11 +90,3 @@ export interface TokensIndex {
   lastUpdated: string;
   tokens: Record<string, TokenMetadata>;
 }
-
-// Recently viewed item
-export interface RecentlyViewedItem {
-  address: string;
-  visitedAt: number;
-  token: string;
-  recipient: string;
-}
