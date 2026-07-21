@@ -309,7 +309,9 @@ def test_rejects_invalid_owner(
     ("amount_override", "duration_override", "cliff_override", "error"),
     [
         (0, None, 0, "amount must be > 0"),
+        (2**128, None, 0, "amount too large"),
         (None, 0, 0, "invalid vesting period"),
+        (None, 2**64, 0, "duration too long"),
         (None, 10, 11, "invalid cliff"),
     ],
 )
@@ -328,8 +330,9 @@ def test_rejects_invalid_schedule(
 ):
     actual_amount = amount if amount_override is None else amount_override
     actual_duration = duration if duration_override is None else duration_override
-    token.mint(owner, amount, sender=owner)
-    token.approve(vesting_factory, amount, sender=owner)
+    funding = max(amount, actual_amount)
+    token.mint(owner, funding, sender=owner)
+    token.approve(vesting_factory, funding, sender=owner)
 
     with boa.reverts(dev=error):
         deploy_escrow(
@@ -421,6 +424,33 @@ def test_rejects_zero_initial_principal(
             recipient,
             owner,
             1,
+            duration,
+            start_time,
+            yield_to_owner=True,
+        )
+
+
+def test_rejects_principal_above_limit(
+    vesting_factory,
+    owner,
+    recipient,
+    vault,
+    duration,
+    start_time,
+):
+    amount = 10**18
+    vault.set_assets_per_share(2**128, sender=owner)
+    vault.mint(owner, amount, sender=owner)
+    vault.approve(vesting_factory, amount, sender=owner)
+
+    with boa.reverts(dev="principal too large"):
+        deploy_escrow(
+            vesting_factory,
+            vault,
+            owner,
+            recipient,
+            owner,
+            amount,
             duration,
             start_time,
             yield_to_owner=True,

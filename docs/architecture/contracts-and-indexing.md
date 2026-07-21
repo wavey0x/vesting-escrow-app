@@ -96,6 +96,10 @@ The mode flag changes accounting, not the lifecycle API:
 | `false` | Standard ERC-20 | `amount` token units | None |
 | `true` | ERC-4626 shares | `convertToAssets(amount)` asset units | Original owner |
 
+Amounts and initial principal are limited to `uint128`; duration is limited to
+`uint64`. These practical bounds keep proportional arithmetic readable and
+overflow-safe with ordinary checked `uint256` multiplication.
+
 Both modes use the same fixed destinations and actions:
 
 ```text

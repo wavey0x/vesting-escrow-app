@@ -13,26 +13,22 @@ def split(balance, value, remaining):
     return balance - yield_shares, yield_shares
 
 
-def mul_div_up(x, y, denominator):
-    return (x * y + denominator - 1) // denominator
-
-
 def payout(principal_shares, remaining_before, remaining_after):
     if remaining_after == 0:
         return principal_shares
-    return principal_shares - mul_div_up(
-        principal_shares,
-        remaining_after,
-        remaining_before,
-    )
+    numerator = principal_shares * remaining_after
+    reserve = numerator // remaining_before
+    if numerator % remaining_before:
+        reserve += 1
+    return principal_shares - reserve
 
 
 @settings(deadline=None, max_examples=1_000)
 @given(
-    principal=st.integers(min_value=1, max_value=2**256 - 1),
-    balance=st.integers(min_value=1, max_value=2**256 - 1),
+    principal=st.integers(min_value=1, max_value=2**128 - 1),
+    balance=st.integers(min_value=1, max_value=2**128 - 1),
     claim_bps=st.integers(min_value=0, max_value=10_000),
-    value=st.integers(min_value=1, max_value=2**256 - 1),
+    value=st.integers(min_value=1, max_value=2**128 - 1),
 )
 def test_split_conserves_shares_and_rounds_toward_principal(
     principal,

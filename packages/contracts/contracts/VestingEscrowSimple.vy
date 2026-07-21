@@ -43,7 +43,8 @@ event SetOpenClaim:
     state: bool
 
 
-UINT_MAX: constant(uint256) = max_value(uint256)
+MAX_AMOUNT: constant(uint256) = 2**128 - 1
+MAX_DURATION: constant(uint256) = 2**64 - 1
 
 recipient: public(address)
 token: public(ERC4626)
@@ -94,10 +95,13 @@ def initialize(
     self.initialized = True
 
     assert amount > 0  # dev: amount must be > 0
+    assert amount <= MAX_AMOUNT  # dev: amount too large
     assert owner != empty(address)  # dev: invalid owner
     assert recipient not in [empty(address), self, token.address, owner]  # dev: invalid recipient
     assert end_time > block.timestamp and end_time > start_time  # dev: invalid vesting period
-    assert cliff_length <= end_time - start_time  # dev: invalid cliff
+    duration: uint256 = end_time - start_time
+    assert duration <= MAX_DURATION  # dev: duration too long
+    assert cliff_length <= duration  # dev: invalid cliff
     assert staticcall token.balanceOf(self) >= amount  # dev: escrow not funded
 
     asset: address = token.address
@@ -108,6 +112,7 @@ def initialize(
         assert asset != empty(address)  # dev: invalid asset
         principal = staticcall token.convertToAssets(amount)
         assert principal > 0  # dev: zero principal
+        assert principal <= MAX_AMOUNT  # dev: principal too large
         yield_recipient = owner
 
     self.owner = owner
@@ -127,51 +132,6 @@ def initialize(
 
 
 @internal
-@pure
-def _mul_div_down(x: uint256, y: uint256, denominator: uint256) -> uint256:
-    """Full-precision floor(x * y / denominator)."""
-    assert denominator > 0  # dev: division by zero
-
-    product_low: uint256 = unsafe_mul(x, y)
-    mm: uint256 = uint256_mulmod(x, y, UINT_MAX)
-    product_high: uint256 = unsafe_sub(unsafe_sub(mm, product_low), convert(mm < product_low, uint256))
-
-    if product_high == 0:
-        return product_low // denominator
-
-    assert denominator > product_high  # dev: mulDiv overflow
-
-    remainder: uint256 = uint256_mulmod(x, y, denominator)
-    product_high = unsafe_sub(product_high, convert(remainder > product_low, uint256))
-    product_low = unsafe_sub(product_low, remainder)
-
-    twos: uint256 = denominator & unsafe_sub(0, denominator)
-    denominator = denominator // twos
-    product_low = product_low // twos
-    twos = unsafe_add(unsafe_div(unsafe_sub(0, twos), twos), 1)
-    product_low = product_low | unsafe_mul(product_high, twos)
-
-    inverse: uint256 = unsafe_mul(3, denominator) ^ 2
-    inverse = unsafe_mul(inverse, unsafe_sub(2, unsafe_mul(denominator, inverse)))
-    inverse = unsafe_mul(inverse, unsafe_sub(2, unsafe_mul(denominator, inverse)))
-    inverse = unsafe_mul(inverse, unsafe_sub(2, unsafe_mul(denominator, inverse)))
-    inverse = unsafe_mul(inverse, unsafe_sub(2, unsafe_mul(denominator, inverse)))
-    inverse = unsafe_mul(inverse, unsafe_sub(2, unsafe_mul(denominator, inverse)))
-    inverse = unsafe_mul(inverse, unsafe_sub(2, unsafe_mul(denominator, inverse)))
-
-    return unsafe_mul(product_low, inverse)
-
-
-@internal
-@pure
-def _mul_div_up(x: uint256, y: uint256, denominator: uint256) -> uint256:
-    result: uint256 = self._mul_div_down(x, y, denominator)
-    if uint256_mulmod(x, y, denominator) > 0:
-        result += 1
-    return result
-
-
-@internal
 @view
 def _total_vested_at(time: uint256) -> uint256:
     start: uint256 = self.start_time
@@ -179,7 +139,7 @@ def _total_vested_at(time: uint256) -> uint256:
         return 0
     if time >= self.end_time:
         return self.total_principal
-    return self._mul_div_down(self.total_principal, time - start, self.end_time - start)
+    return self.total_principal * (time - start) // (self.end_time - start)
 
 
 @internal
@@ -207,7 +167,7 @@ def _split(remaining: uint256) -> (uint256, uint256):
     if value <= remaining:
         return balance, 0
 
-    yield_shares: uint256 = self._mul_div_down(balance, value - remaining, value)
+    yield_shares: uint256 = balance * (value - remaining) // value
     return balance - yield_shares, yield_shares
 
 
@@ -220,7 +180,10 @@ def _payout_shares(
 ) -> uint256:
     if remaining_after == 0:
         return principal_shares
-    reserve: uint256 = self._mul_div_up(principal_shares, remaining_after, remaining_before)
+    numerator: uint256 = principal_shares * remaining_after
+    reserve: uint256 = numerator // remaining_before
+    if numerator % remaining_before > 0:
+        reserve += 1
     return principal_shares - reserve
 
 

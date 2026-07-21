@@ -6,10 +6,6 @@ from tests.helpers import ZERO_ADDRESS, at, deploy
 SCALE = 10**18
 
 
-def mul_div_up(x, y, denominator):
-    return (x * y + denominator - 1) // denominator
-
-
 def split(balance, value, remaining):
     if remaining == 0:
         return 0, balance
@@ -22,11 +18,11 @@ def split(balance, value, remaining):
 def payout(principal_shares, remaining_before, remaining_after):
     if remaining_after == 0:
         return principal_shares
-    return principal_shares - mul_div_up(
-        principal_shares,
-        remaining_after,
-        remaining_before,
-    )
+    numerator = principal_shares * remaining_after
+    reserve = numerator // remaining_before
+    if numerator % remaining_before:
+        reserve += 1
+    return principal_shares - reserve
 
 
 def test_flat_rate_claims_shares(
@@ -248,14 +244,14 @@ def test_closed_claim_only_allows_recipient(
         yield_vesting.claim(sender=owner)
 
 
-def test_full_precision_vesting_at_uint256_limit(
+def test_vesting_at_amount_limit(
     chain,
     vesting_factory,
     owner,
     recipient,
     asset_token,
 ):
-    maximum = 2**256 - 1
+    maximum = 2**128 - 1
     duration = 100
     start = chain.pending_timestamp + 10
     vault = deploy("test/MockERC4626", asset_token, sender=owner)
