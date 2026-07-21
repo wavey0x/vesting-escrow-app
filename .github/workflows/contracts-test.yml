@@ -1,0 +1,49 @@
+name: Contract Tests
+
+on:
+  push:
+    paths:
+      - 'packages/contracts/**'
+      - '.github/workflows/contracts-test.yml'
+  pull_request:
+    paths:
+      - 'packages/contracts/**'
+      - '.github/workflows/contracts-test.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/contracts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+          cache: pip
+          cache-dependency-path: packages/contracts/requirements.txt
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.5.1
+
+      - name: Install contract dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -r requirements.txt
+
+      - name: Compile contracts
+        run: .venv/bin/ape compile --size
+
+      - name: Run functional tests
+        run: .venv/bin/ape test tests/functional/ --gas --coverage
+
+      - name: Run property tests
+        run: .venv/bin/ape test tests/integration/ -s

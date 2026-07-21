@@ -1,0 +1,4 @@
+ape-foundry==0.8.12
+ape-vyper==0.8.12
+eth-ape==0.8.50
+hypothesis==6.156.6

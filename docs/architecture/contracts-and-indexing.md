@@ -8,7 +8,7 @@ This document captures the onchain contracts, indexer inputs, and app-side statu
 - Active factory used by the create flow:
   - `0x200C92Dd85730872Ab6A1e7d5E40A067066257cF`
   - Deploy block: `18,291,969`
-- Historical factory still indexed by the app:
+- Compatible Curve factory indexed by the app:
   - `0xcf61782465Ff973638143d6492B51A85986aB347`
   - Deploy block: `19,739,664`
 
@@ -17,6 +17,17 @@ The frontend uses the active factory constant in `src/lib/constants.ts`. The ind
 ## VestingEscrowFactory
 
 The factory deploys `VestingEscrowSimple` instances using minimal proxies.
+
+Editable contract sources, tests, and Ape deployment tooling are vendored at
+`packages/contracts/` from the upstream v0.3.0 release. See
+`packages/contracts/UPSTREAM.md` for provenance and
+`docs/architecture/contracts-development-and-deployment.md` for the change and
+redeployment plan.
+
+The local unreleased source includes the compatible Curve fork's escrow
+registry, zero default donation, revoke ordering, and dust-solvency assertion.
+The escrow ABI and `VestingEscrowCreated` event are unchanged; the factory ABI
+only adds `escrows(uint256)` and `escrows_length()` getters.
 
 ### `deploy_vesting_contract`
 
@@ -110,6 +121,11 @@ All Python indexer assets now live under `scripts/indexer/`:
 - `scripts/indexer/abi/VestingEscrowSimple.json`
 
 The ABI JSON files are indexer assets. The frontend uses inline ABI fragments for the contract calls it needs.
+
+The contract package's compiler artifacts under `packages/contracts/.build/`
+are generated and ignored. If a contract change affects an ABI, regenerate the
+consumer ABIs from a reviewed build instead of allowing the frontend, indexer,
+and Vyper source to drift independently.
 
 ## Index Outputs
 
