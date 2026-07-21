@@ -5,16 +5,12 @@
       {"name": "funder", "type": "address", "indexed": true},
       {"name": "token", "type": "address", "indexed": true},
       {"name": "recipient", "type": "address", "indexed": true},
-      {"name": "owner", "type": "address", "indexed": false},
       {"name": "escrow", "type": "address", "indexed": false},
       {"name": "amount", "type": "uint256", "indexed": false},
       {"name": "vesting_start", "type": "uint256", "indexed": false},
       {"name": "vesting_duration", "type": "uint256", "indexed": false},
       {"name": "cliff_length", "type": "uint256", "indexed": false},
-      {"name": "open_claim", "type": "bool", "indexed": false},
-      {"name": "yield_to_owner", "type": "bool", "indexed": false},
-      {"name": "asset", "type": "address", "indexed": false},
-      {"name": "principal", "type": "uint256", "indexed": false}
+      {"name": "open_claim", "type": "bool", "indexed": false}
     ],
     "anonymous": false,
     "type": "event"

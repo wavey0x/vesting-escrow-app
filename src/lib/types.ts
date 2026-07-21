@@ -15,6 +15,7 @@ export interface IndexedEscrow {
   openClaim: boolean;
   blockNumber: number;
   txHash: string;
+  yieldToOwner?: boolean;
   asset?: string;
   yieldRecipient?: string;
   principal?: string;
@@ -43,10 +44,6 @@ export interface LiveEscrowData {
   cliffLength: bigint;
   openClaim: boolean;
   claimableYield?: bigint;
-  asset?: string;
-  yieldRecipient?: string;
-  totalPrincipal?: bigint;
-  principalClaimed?: bigint;
 }
 
 // Combined escrow data

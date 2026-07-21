@@ -21,6 +21,7 @@ import requests
 from web3 import Web3
 
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 100_000))
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 PREFERRED_LOGO_DOMAIN = "smold"  # Substring matched against logoUrl to identify preferred source
 
@@ -124,9 +125,10 @@ FACTORIES = DEPLOYMENTS["factories"]
 CHAIN_ID = DEPLOYMENTS["chainId"]
 
 
-def load_factory_abi() -> list:
-    """Load the factory ABI from file."""
-    abi_path = ABI_DIR / "VestingEscrowFactory.json"
+def load_factory_abi(version: int) -> list:
+    """Load the event ABI matching a factory's immutable version."""
+    filename = "VestingEscrowFactoryLegacy.json" if version == 1 else "VestingEscrowFactory.json"
+    abi_path = ABI_DIR / filename
     with open(abi_path) as f:
         return json.load(f)
 
@@ -206,13 +208,13 @@ def load_existing_tokens() -> dict:
         }
 
 
-def event_to_escrow(event, factory_address: str) -> dict:
+def event_to_escrow(event, factory: dict) -> dict:
     """Convert a web3.py event object to our escrow format."""
     args = event["args"]
-    return {
+    escrow = {
         "address": args["escrow"],
-        "factory": factory_address,
-        "version": 1,
+        "factory": factory["address"],
+        "version": factory["version"],
         "funder": args["funder"],
         "token": args["token"].lower(),  # lowercase for consistency
         "recipient": args["recipient"],
@@ -225,46 +227,23 @@ def event_to_escrow(event, factory_address: str) -> dict:
         "txHash": event["transactionHash"].hex(),
     }
 
-
-def configuration_event_to_metadata(event) -> dict:
-    """Convert the companion V2 event into fields attached to its creation event."""
-    args = event["args"]
-    return {
-        "address": args["escrow"],
-        "version": 2,
-        "asset": args["asset"],
-        "yieldRecipient": args["yield_recipient"],
-        "principal": str(args["principal"]),
-    }
-
-
-def merge_configuration_events(escrows: list, configurations: list) -> list:
-    """Mark only escrows positively identified by a V2 companion event."""
-    by_address = {item["address"].lower(): item for item in configurations}
-    for escrow in escrows:
-        configuration = by_address.get(escrow["address"].lower())
-        if configuration:
-            escrow.update({key: value for key, value in configuration.items() if key != "address"})
-    return escrows
+    if factory["version"] == 2:
+        escrow.update({
+            "yieldToOwner": args["yield_to_owner"],
+            "asset": args["asset"],
+            "yieldRecipient": args["owner"] if args["yield_to_owner"] else ZERO_ADDRESS,
+            "principal": str(args["principal"]),
+        })
+    return escrow
 
 
 def fetch_events(contract, from_block: int, to_block: int, factory: dict) -> list:
-    """Fetch creation events and attach V2 configuration when supported."""
+    """Fetch creation events using the factory's versioned event ABI."""
     created_events = contract.events.VestingEscrowCreated.get_logs(
         from_block=from_block,
         to_block=to_block
     )
-    escrows = [event_to_escrow(event, factory["address"]) for event in created_events]
-
-    if factory["version"] < 2:
-        return escrows
-
-    configured_events = contract.events.VestingEscrowV2Configured.get_logs(
-        from_block=from_block,
-        to_block=to_block,
-    )
-    configurations = [configuration_event_to_metadata(event) for event in configured_events]
-    return merge_configuration_events(escrows, configurations)
+    return [event_to_escrow(event, factory) for event in created_events]
 
 
 DEFAULT_TOKEN_METADATA = {
@@ -447,7 +426,6 @@ def main():
     w3 = get_web3()
     if w3.eth.chain_id != CHAIN_ID:
         raise SystemExit(f"expected chain ID {CHAIN_ID}, connected to {w3.eth.chain_id}")
-    abi = load_factory_abi()
     data = load_existing_data()
     tokens_data = load_existing_tokens()
 
@@ -464,7 +442,7 @@ def main():
     for factory in FACTORIES:
         addr = factory["address"]
         print(f"\nIndexing factory {addr}...")
-        contract = w3.eth.contract(address=addr, abi=abi)
+        contract = w3.eth.contract(address=addr, abi=load_factory_abi(factory["version"]))
         new_tokens = index_factory(contract, data, factory, current_block, existing_addresses)
         all_new_tokens.update(new_tokens)
 

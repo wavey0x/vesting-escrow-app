@@ -3,18 +3,19 @@ import {
   encodeEventTopics,
   getAddress,
   toFunctionSelector,
+  zeroAddress,
   type Hex,
 } from 'viem';
 import { describe, expect, it } from 'vitest';
 import {
   ACTIVE_FACTORY,
+  claimAbi,
   decodeCreatedEscrow,
   legacyClaimAbi,
+  legacyVestingEscrowCreatedEvent,
   requiredFunding,
   revokeAbi,
-  v2ClaimAbi,
   vestingEscrowCreatedEvent,
-  vestingEscrowV2ConfiguredEvent,
   type FactoryDeployment,
 } from './contracts';
 
@@ -27,17 +28,17 @@ const addresses = {
   asset: getAddress('0x0000000000000000000000000000000000000006'),
 } as const;
 
-const factory: FactoryDeployment = {
+const currentFactory: FactoryDeployment = {
   address: addresses.factory,
   deployBlock: 10,
   version: 2,
 };
 
-function createdLog() {
+function legacyCreatedLog() {
   return {
     address: addresses.factory,
     topics: encodeEventTopics({
-      abi: [vestingEscrowCreatedEvent],
+      abi: [legacyVestingEscrowCreatedEvent],
       eventName: 'VestingEscrowCreated',
       args: {
         funder: addresses.funder,
@@ -59,19 +60,44 @@ function createdLog() {
   };
 }
 
-function configuredLog() {
+function createdLog(yieldToOwner = true) {
   return {
     address: addresses.factory,
     topics: encodeEventTopics({
-      abi: [vestingEscrowV2ConfiguredEvent],
-      eventName: 'VestingEscrowV2Configured',
+      abi: [vestingEscrowCreatedEvent],
+      eventName: 'VestingEscrowCreated',
       args: {
-        escrow: addresses.escrow,
-        asset: addresses.asset,
-        yield_recipient: addresses.funder,
+        funder: addresses.funder,
+        token: addresses.token,
+        recipient: addresses.recipient,
       },
     }),
-    data: encodeAbiParameters([{ type: 'uint256' }], [900n]),
+    data: encodeAbiParameters(
+      [
+        { type: 'address' },
+        { type: 'address' },
+        { type: 'uint256' },
+        { type: 'uint256' },
+        { type: 'uint256' },
+        { type: 'uint256' },
+        { type: 'bool' },
+        { type: 'bool' },
+        { type: 'address' },
+        { type: 'uint256' },
+      ],
+      [
+        addresses.funder,
+        addresses.escrow,
+        1_000n,
+        100n,
+        200n,
+        10n,
+        true,
+        yieldToOwner,
+        addresses.asset,
+        900n,
+      ],
+    ),
   };
 }
 
@@ -86,13 +112,13 @@ describe('contract integration helpers', () => {
     expect(requiredFunding(10_001n, 0n)).toBe(10_001n);
   });
 
-  it('decodes a legacy creation receipt without relying on log position', () => {
+  it('decodes a legacy creation receipt using the configured factory version', () => {
     const escrow = decodeCreatedEscrow({
       logs: [
         { address: addresses.token, topics: [] as [], data: '0x' as Hex },
-        createdLog(),
+        legacyCreatedLog(),
       ],
-      factory,
+      factory: { ...currentFactory, version: 1 },
       blockNumber: 42n,
       transactionHash: `0x${'1'.repeat(64)}`,
     });
@@ -109,27 +135,43 @@ describe('contract integration helpers', () => {
     });
   });
 
-  it('marks an escrow as version 2 only when the companion event matches', () => {
+  it('decodes all current configuration from one creation event', () => {
     const escrow = decodeCreatedEscrow({
-      logs: [configuredLog(), createdLog()],
-      factory,
+      logs: [createdLog()],
+      factory: currentFactory,
       blockNumber: 42n,
       transactionHash: `0x${'2'.repeat(64)}`,
     });
 
     expect(escrow).toMatchObject({
       version: 2,
+      yieldToOwner: true,
       asset: addresses.asset,
       yieldRecipient: addresses.funder,
       principal: '900',
     });
   });
 
-  it('keeps the versioned claim selectors and zero-argument revoke selector distinct', () => {
+  it('records standard mode without a yield recipient', () => {
+    const escrow = decodeCreatedEscrow({
+      logs: [createdLog(false)],
+      factory: currentFactory,
+      blockNumber: 42n,
+      transactionHash: `0x${'3'.repeat(64)}`,
+    });
+
+    expect(escrow).toMatchObject({
+      version: 2,
+      yieldToOwner: false,
+      yieldRecipient: zeroAddress,
+    });
+  });
+
+  it('keeps the historical and current claim selectors distinct', () => {
     expect(toFunctionSelector(legacyClaimAbi[0])).toBe(
       toFunctionSelector('claim(address,uint256)'),
     );
-    expect(toFunctionSelector(v2ClaimAbi[0])).toBe(toFunctionSelector('claim(address)'));
+    expect(toFunctionSelector(claimAbi[0])).toBe(toFunctionSelector('claim()'));
     expect(toFunctionSelector(revokeAbi[0])).toBe(toFunctionSelector('revoke()'));
   });
 });

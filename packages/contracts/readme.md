@@ -8,15 +8,13 @@ for the rollout gates.
 
 ## Contracts
 
-- `VestingEscrowSimple.vy` is the frozen legacy implementation. It remains on
-  Vyper 0.3.10 and compiles through VVM.
-- `VestingEscrowSimpleV2.vy` vests ERC-4626 principal while funding and paying
-  in vault shares. Yield shares go to the original owner.
-- `VestingEscrowFactory.vy` routes deployments to the legacy or version 2
-  implementation and preserves the legacy creation event.
+- `VestingEscrowSimple.vy` is the sole implementation. It supports standard
+  ERC-20 vesting and optional ERC-4626 share accounting.
+- `VestingEscrowFactory.vy` funds and initializes minimal proxies of that one
+  implementation.
 
-The factory, version 2 implementation, and mocks compile with Vyper 0.4.3 for
-Prague. The version 2 factory has not been deployed or audited.
+All contracts compile with Vyper 0.4.3 for Prague. The current factory and
+implementation report `version() == 2`; they have not been deployed or audited.
 
 ## Development
 

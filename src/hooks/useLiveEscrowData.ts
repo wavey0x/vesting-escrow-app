@@ -1,6 +1,6 @@
 import { useReadContracts } from 'wagmi';
 import { Address } from 'viem';
-import { EscrowVersion, LiveEscrowData } from '../lib/types';
+import { LiveEscrowData } from '../lib/types';
 import { escrowReadAbi } from '../lib/contracts';
 
 const COMMON_FUNCTIONS = [
@@ -16,17 +16,9 @@ const COMMON_FUNCTIONS = [
   'open_claim',
 ] as const;
 
-const V2_FUNCTIONS = [
-  'claimable_yield',
-  'asset',
-  'yield_recipient',
-  'total_principal',
-  'principal_claimed',
-] as const;
-
-export function useLiveEscrowData(escrowAddress?: string, version: EscrowVersion = 1) {
-  const functionNames = version === 2
-    ? [...COMMON_FUNCTIONS, ...V2_FUNCTIONS]
+export function useLiveEscrowData(escrowAddress?: string, yieldToOwner = false) {
+  const functionNames = yieldToOwner
+    ? [...COMMON_FUNCTIONS, 'claimable_yield' as const]
     : COMMON_FUNCTIONS;
   const contracts = escrowAddress
     ? functionNames.map((functionName) => ({
@@ -57,12 +49,8 @@ export function useLiveEscrowData(escrowAddress?: string, version: EscrowVersion
       startTime: data[7].result as bigint,
       cliffLength: data[8].result as bigint,
       openClaim: data[9].result as boolean,
-      ...(version === 2 && {
+      ...(yieldToOwner && {
         claimableYield: data[10].result as bigint,
-        asset: data[11].result as string,
-        yieldRecipient: data[12].result as string,
-        totalPrincipal: data[13].result as bigint,
-        principalClaimed: data[14].result as bigint,
       }),
     };
   }

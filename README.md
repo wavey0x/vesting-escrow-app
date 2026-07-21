@@ -41,10 +41,9 @@ do not edit it by hand.
 
 ## Contracts
 
-The package uses Titanoboa 0.2.8 and Vyper 0.4.3. The deployed legacy target is
-kept on Vyper 0.3.10 and compiled through VVM so its source and bytecode
-provenance remain intact. The factory, V2 implementation, and test contracts
-use Vyper 0.4.3 with an explicit Prague target.
+The package uses Titanoboa 0.2.8 and Vyper 0.4.3 with an explicit Prague target.
+One `VestingEscrowSimple` implementation supports standard ERC-20 vesting and
+optional ERC-4626 share accounting.
 
 ```sh
 ./packages/contracts/setup-python.sh

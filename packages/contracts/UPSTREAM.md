@@ -14,24 +14,28 @@ not a nested Git repository or a Git submodule.
 
 ## Local divergence
 
-The upstream release is the baseline, but the local contract source now
-intentionally ports four changes from the verified Curve deployment at factory
-`0xcf61782465Ff973638143d6492B51A85986aB347` and target
-`0x9dd5cF263327e2D6a608da8c30368Eb27514bAD2`:
-
-- record deployed escrows in `escrows` and `escrows_length`;
-- default `support_vyper` to zero basis points;
-- clear the escrow owner before the external transfer in `revoke`;
-- assert vested-token solvency after `collect_dust`.
-
 Commit `f3dcdd8` records the last all-Vyper-0.3.10 snapshot. At that commit,
 compiling with the Curve constructor values produced factory and target runtime
-bytecode hashes matching the deployed Curve contracts. The legacy
-`VestingEscrowSimple` source remains frozen on Vyper 0.3.10 and is compiled
-through VVM. The current factory, V2 implementation, and mocks use Vyper 0.4.3;
-their behavior and ABI remain compatible where documented, but their bytecode
-is intentionally different. These changes are unreleased and must not be
-overwritten during an upstream sync.
+bytecode hashes matching the verified Curve deployment at factory
+`0xcf61782465Ff973638143d6492B51A85986aB347` and target
+`0x9dd5cF263327e2D6a608da8c30368Eb27514bAD2`.
+
+The current unreleased source is a deliberate versioned redesign:
+
+- one Vyper 0.4.3 `VestingEscrowSimple` implementation handles standard ERC-20
+  vesting and optional ERC-4626 share accounting;
+- one factory target replaces separate legacy/current implementation routing;
+- proxies are funded before one-time initialization;
+- recipient and yield destinations are fixed, and claims have no destination
+  arguments;
+- the factory emits one complete creation event and keeps no redundant escrow
+  registry;
+- Titanoboa tests replace the imported Ape suite.
+
+This changes ABI and bytecode intentionally. Deployed version 1 contracts are
+preserved as historical frontend/indexer integrations rather than retained as
+editable source. The unreleased changes must not be overwritten during an
+upstream sync.
 
 The upstream workflow was replaced by the root monorepo workflow. Its stale
 development spec and redundant local demo deployment were omitted; the current

@@ -13,6 +13,20 @@ def split(balance, value, remaining):
     return balance - yield_shares, yield_shares
 
 
+def mul_div_up(x, y, denominator):
+    return (x * y + denominator - 1) // denominator
+
+
+def payout(principal_shares, remaining_before, remaining_after):
+    if remaining_after == 0:
+        return principal_shares
+    return principal_shares - mul_div_up(
+        principal_shares,
+        remaining_after,
+        remaining_before,
+    )
+
+
 @settings(deadline=None, max_examples=1_000)
 @given(
     principal=st.integers(min_value=1, max_value=2**256 - 1),
@@ -28,11 +42,7 @@ def test_split_conserves_shares_and_rounds_toward_principal(
 ):
     claimable = principal * claim_bps // 10_000
     principal_pool, yield_shares = split(balance, value, principal)
-    claim_shares = (
-        principal_pool
-        if claimable == principal
-        else principal_pool * claimable // principal
-    )
+    claim_shares = payout(principal_pool, principal, principal - claimable)
     remaining_shares = balance - yield_shares - claim_shares
 
     assert yield_shares + claim_shares + remaining_shares == balance
@@ -69,11 +79,7 @@ def test_lifecycle_conserves_every_share_and_drains_at_completion(principal, act
         claimable = remaining * claim_bps // 10_000
         value = balance * assets_per_share // SCALE
         principal_pool, yield_shares = split(balance, value, remaining)
-        claim_shares = (
-            principal_pool
-            if claimable == remaining
-            else principal_pool * claimable // remaining
-        )
+        claim_shares = payout(principal_pool, remaining, remaining - claimable)
         balance -= yield_shares + claim_shares
         remaining -= claimable
         distributed += yield_shares + claim_shares

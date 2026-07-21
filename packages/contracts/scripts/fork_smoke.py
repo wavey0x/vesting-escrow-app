@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the V2 deployment lifecycle against a pinned Ethereum fork."""
+"""Exercise vault-share vesting against a pinned Ethereum fork."""
 
 import os
 from pathlib import Path
@@ -31,12 +31,10 @@ def main():
     recipient = boa.env.generate_address("fork-recipient")
     asset = boa.load(CONTRACTS / "test" / "MockToken.vy", sender=owner)
     vault = boa.load(CONTRACTS / "test" / "MockERC4626.vy", asset, sender=owner)
-    legacy = boa.load(CONTRACTS / "VestingEscrowSimple.vy", sender=owner)
-    target_v2 = boa.load(CONTRACTS / "VestingEscrowSimpleV2.vy", sender=owner)
+    target = boa.load(CONTRACTS / "VestingEscrowSimple.vy", sender=owner)
     factory = boa.load(
         CONTRACTS / "VestingEscrowFactory.vy",
-        legacy,
-        target_v2,
+        target,
         owner,
         sender=owner,
     )
@@ -58,14 +56,14 @@ def main():
         True,
         sender=owner,
     )
-    escrow = boa.load_partial(CONTRACTS / "VestingEscrowSimpleV2.vy").at(escrow_address)
+    escrow = boa.load_partial(CONTRACTS / "VestingEscrowSimple.vy").at(escrow_address)
 
     vault.set_assets_per_share(12 * 10**17, sender=owner)
     boa.env.time_travel(seconds=560)
     assert escrow.claim(sender=recipient) > 0
     assert vault.balanceOf(owner) > 0
     assert vault.convertToAssets(vault.balanceOf(escrow)) >= amount - escrow.principal_claimed()
-    print(f"mainnet fork V2 lifecycle passed at block {boa.env.evm.patch.block_number}")
+    print(f"mainnet fork lifecycle passed at block {boa.env.evm.patch.block_number}")
 
 
 if __name__ == "__main__":

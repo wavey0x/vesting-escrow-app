@@ -8,8 +8,8 @@ import TokenAmount from '../components/TokenAmount';
 import {
   ACTIVE_FACTORY,
   decodeCreatedEscrow,
-  factoryV1Abi,
-  factoryV2Abi,
+  factoryAbi,
+  legacyFactoryAbi,
   requiredFunding,
 } from '../lib/contracts';
 import { savePendingEscrow } from '../lib/pendingEscrows';
@@ -79,7 +79,7 @@ export default function Create() {
   const [startDate, setStartDate] = useState('');
   const [openClaim, setOpenClaim] = useState(false);
   const [supportVyper, setSupportVyper] = useState(false);
-  const [useVersionTwo, setUseVersionTwo] = useState(false);
+  const [yieldToOwner, setYieldToOwner] = useState(false);
 
   const [step, setStep] = useState<Step>('form');
   const [createdEscrow, setCreatedEscrow] = useState<string>('');
@@ -197,14 +197,14 @@ export default function Create() {
     if (ACTIVE_FACTORY.version === 2) {
       deploy({
         address: FACTORY_ADDRESS,
-        abi: factoryV2Abi,
+        abi: factoryAbi,
         functionName: 'deploy_vesting_contract',
-        args: [...commonArgs, useVersionTwo],
+        args: [...commonArgs, yieldToOwner],
       });
     } else {
       deploy({
         address: FACTORY_ADDRESS,
-        abi: factoryV1Abi,
+        abi: legacyFactoryAbi,
         functionName: 'deploy_vesting_contract',
         args: commonArgs,
       });
@@ -515,12 +515,12 @@ export default function Create() {
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={useVersionTwo}
-                onChange={(event) => setUseVersionTwo(event.target.checked)}
+                checked={yieldToOwner}
+                onChange={(event) => setYieldToOwner(event.target.checked)}
                 className="text-primary"
               />
               <span className="text-secondary">
-                Use version 2 for vault shares and return generated yield to the owner
+                Treat this token as ERC-4626 vault shares and return generated yield to the owner
               </span>
             </label>
           </div>

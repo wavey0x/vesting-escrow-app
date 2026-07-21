@@ -50,7 +50,7 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 | `Claim` | User is recipient or `open_claim` is enabled and claimable amount is non-zero |
 | `Revoke` | User is current owner, escrow has locked tokens, and vesting has not ended |
 | `Disown` | User is current owner and owner is not the zero address |
-| `Claim Yield` | Version 2 escrow has claimable yield; payout always goes to its fixed yield recipient |
+| `Claim Yield` | Yield mode is enabled and claimable yield is non-zero; payout always goes to the original owner |
 
 ## Create Flow
 
@@ -64,7 +64,7 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 - Start now or explicit start date
 - `open claim` toggle
 - `support Vyper` toggle
-- Version 2 toggle when the active factory supports it
+- `return vault yield to owner` toggle when the active factory supports it
 
 ### Behavior
 
@@ -73,8 +73,8 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 - ERC20 approval happens before deployment when allowance is insufficient.
 - Balance and allowance checks include the optional Vyper donation.
 - The owner is the connected wallet; there is no separate owner input in the current UI.
-- Version 2 funding and claims use the vault wrapper token as shares; the app never deposits or redeems underlying assets.
-- The app ABI-decodes `VestingEscrowCreated` and the optional version 2 companion event from the receipt, then routes to the new escrow.
+- Vault mode funding and claims use the ERC-4626 wrapper token as shares; the app never deposits or redeems underlying assets.
+- The app ABI-decodes the factory's single `VestingEscrowCreated` event from the receipt, caches the confirmed escrow, then routes to it.
 
 ## Data Model
 
@@ -97,7 +97,11 @@ The detail and list views read live escrow state on demand:
 - `start_time`
 - `cliff_length`
 - `open_claim`
-- Version 2 only: `claimable_yield`, `asset`, `yield_recipient`, `total_principal`, and `principal_claimed`
+- Yield mode only: `claimable_yield`
+
+Immutable yield-mode metadata (`asset`, `yieldRecipient`, and initial
+`principal`) comes from the indexed creation event rather than repeated RPC
+reads.
 
 ### External Data
 

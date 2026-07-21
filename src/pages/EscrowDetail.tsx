@@ -31,7 +31,7 @@ import {
   isOwner,
   isRecipient,
 } from '../lib/escrow';
-import { legacyClaimAbi, v2ClaimAbi, v2YieldAbi } from '../lib/contracts';
+import { claimAbi, legacyClaimAbi, yieldClaimAbi } from '../lib/contracts';
 import type { EscrowVersion } from '../lib/types';
 
 function formatDaysUntil(timestamp: number, now: number): string {
@@ -83,7 +83,7 @@ export default function EscrowDetail() {
   const validEscrowAddress = escrowAddress && isAddress(escrowAddress) ? escrowAddress : undefined;
   const { data: liveData, isLoading: loadingLive, refetch } = useLiveEscrowData(
     validEscrowAddress,
-    version,
+    indexedEscrow?.yieldToOwner,
   );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -361,9 +361,9 @@ export default function EscrowDetail() {
         </div>
       )}
 
-      {version === 2 && liveData?.claimableYield !== undefined && liveData.claimableYield > 0n && (
+      {escrow.yieldToOwner && liveData?.claimableYield !== undefined && liveData.claimableYield > 0n && (
         <div className="w-full min-w-0 p-6 border border-divider-strong rounded-lg">
-          <h2 className="text-lg font-semibold text-primary mb-2">Version 2 Yield</h2>
+          <h2 className="text-lg font-semibold text-primary mb-2">Vault Yield</h2>
           <p className="mb-4 text-sm text-secondary">
             Anyone may send the available vault shares to the fixed yield recipient.
           </p>
@@ -429,14 +429,14 @@ export default function EscrowDetail() {
               </div>
             </DetailRow>
           )}
-          {version === 2 && liveData?.yieldRecipient && (
+          {escrow.yieldToOwner && escrow.yieldRecipient && (
             <DetailRow label="Yield Recipient">
-              <AddressDisplay address={liveData.yieldRecipient} />
+              <AddressDisplay address={escrow.yieldRecipient} />
             </DetailRow>
           )}
-          {version === 2 && liveData?.asset && (
+          {escrow.yieldToOwner && escrow.asset && (
             <DetailRow label="Underlying Asset">
-              <AddressDisplay address={liveData.asset} />
+              <AddressDisplay address={escrow.asset} />
             </DetailRow>
           )}
           <DetailRow label="Duration">
@@ -498,9 +498,8 @@ function ClaimableCard({
     if (version === 2) {
       writeContract({
         address: escrowAddress as ViemAddress,
-        abi: v2ClaimAbi,
+        abi: claimAbi,
         functionName: 'claim',
-        args: [recipient as ViemAddress],
       });
     } else {
       writeContract({
@@ -657,7 +656,7 @@ function YieldClaimButton({
           reset();
           writeContract({
             address: escrowAddress as ViemAddress,
-            abi: v2YieldAbi,
+            abi: yieldClaimAbi,
             functionName: 'claim_yield',
           });
         }}

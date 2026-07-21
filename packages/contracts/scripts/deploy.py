@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deploy both escrow implementations and the versioned factory.
+"""Deploy the escrow implementation and factory.
 
 This is development tooling, not the production rollout script. Network secrets
 are read from the environment and never accepted as command-line values.
@@ -39,19 +39,17 @@ def configure_environment(rpc_url, private_key_env, expected_chain_id):
 
 def deploy_contracts(deployer, vyper_donate):
     target = boa.load(CONTRACTS / "VestingEscrowSimple.vy", sender=deployer)
-    target_v2 = boa.load(CONTRACTS / "VestingEscrowSimpleV2.vy", sender=deployer)
     factory = boa.load(
         CONTRACTS / "VestingEscrowFactory.vy",
         target,
-        target_v2,
         vyper_donate,
         sender=deployer,
     )
 
     assert factory.TARGET() == target.address
-    assert factory.TARGET_V2() == target_v2.address
     assert factory.VYPER() == vyper_donate
-    return target, target_v2, factory
+    assert target.version() == factory.version() == 2
+    return target, factory
 
 
 def main():
@@ -67,7 +65,7 @@ def main():
         args.private_key_env,
         args.expected_chain_id,
     )
-    target, target_v2, factory = deploy_contracts(deployer, args.vyper_donate)
+    target, factory = deploy_contracts(deployer, args.vyper_donate)
 
     print(
         json.dumps(
@@ -76,7 +74,6 @@ def main():
                 "deployer": str(deployer),
                 "vyper_donate": args.vyper_donate,
                 "target": str(target.address),
-                "target_v2": str(target_v2.address),
                 "factory": str(factory.address),
             },
             indent=2,
