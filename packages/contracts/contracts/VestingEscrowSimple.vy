@@ -14,6 +14,7 @@ from ethereum.ercs import IERC20
 interface ERC4626:
     def asset() -> address: view
     def convertToAssets(shares: uint256) -> uint256: view
+    def convertToShares(assets: uint256) -> uint256: view
     def balanceOf(account: address) -> uint256: view
     def transfer(receiver: address, shares: uint256) -> bool: nonpayable
 
@@ -167,8 +168,10 @@ def _split(remaining: uint256) -> (uint256, uint256):
     if value <= remaining:
         return balance, 0
 
-    yield_shares: uint256 = balance * (value - remaining) // value
-    return balance - yield_shares, yield_shares
+    principal_shares: uint256 = staticcall self.token.convertToShares(remaining)
+    if staticcall self.token.convertToAssets(principal_shares) < remaining:
+        principal_shares += 1
+    return principal_shares, balance - principal_shares
 
 
 @internal
@@ -180,9 +183,12 @@ def _payout_shares(
 ) -> uint256:
     if remaining_after == 0:
         return principal_shares
-    numerator: uint256 = principal_shares * remaining_after
-    reserve: uint256 = numerator // remaining_before
-    if numerator % remaining_before > 0:
+
+    whole: uint256 = principal_shares // remaining_before
+    remainder: uint256 = principal_shares % remaining_before
+    scaled_remainder: uint256 = remainder * remaining_after
+    reserve: uint256 = whole * remaining_after + scaled_remainder // remaining_before
+    if scaled_remainder % remaining_before > 0:
         reserve += 1
     return principal_shares - reserve
 

@@ -97,8 +97,9 @@ The mode flag changes accounting, not the lifecycle API:
 | `true` | ERC-4626 shares | `convertToAssets(amount)` asset units | Original owner |
 
 Amounts and initial principal are limited to `uint128`; duration is limited to
-`uint64`. These practical bounds keep proportional arithmetic readable and
-overflow-safe with ordinary checked `uint256` multiplication.
+`uint64`. Live token balances may be larger because direct ERC-20 transfers
+cannot be rejected, so balance-dependent accounting does not rely on the
+initial amount bound.
 
 Both modes use the same fixed destinations and actions:
 
@@ -117,29 +118,36 @@ wrapper; the escrow never deposits, withdraws, or redeems underlying assets.
 ### Share accounting
 
 Let `B` be the escrow's current share balance, `V = convertToAssets(B)`, and `R`
-the remaining principal in asset units.
+the remaining principal in asset units. When there is yield, the vault performs
+the asset-to-share conversion and the escrow rounds the principal reserve up by
+at most one share.
 
 ```text
 if V <= R:
     principal_shares = B
     yield_shares = 0
 else:
-    yield_shares = floor(B * (V - R) / V)
-    principal_shares = B - yield_shares
+    principal_shares = convertToShares(R)
+    if convertToAssets(principal_shares) < R:
+        principal_shares += 1
+    yield_shares = B - principal_shares
 ```
 
 For a principal transition from `R` to `R2`, the escrow keeps the rounded-up
 reserve and pays the remainder:
 
 ```text
-reserve = ceil(principal_shares * R2 / R)
+whole, remainder = divmod(principal_shares, R)
+reserve = whole * R2 + ceil(remainder * R2 / R)
 payout = principal_shares - reserve
 ```
 
 This makes repeated claims equivalent to one claim up to unavoidable share
-rounding and keeps rounding inside the principal reserve. Vault losses are
-borne proportionally by outstanding principal; gains above principal go to the
-original owner.
+rounding and keeps rounding inside the principal reserve. The remainder is
+strictly smaller than the `uint128` principal, so the only explicit
+multiplication is bounded even when direct transfers make the live share
+balance much larger. Vault losses are borne proportionally by outstanding
+principal; gains above principal go to the original owner.
 
 ## Frontend compatibility
 

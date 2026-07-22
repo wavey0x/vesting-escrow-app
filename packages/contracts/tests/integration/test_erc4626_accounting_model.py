@@ -2,6 +2,7 @@ from hypothesis import given, settings, strategies as st
 
 
 SCALE = 10**18
+UINT256_MAX = 2**256 - 1
 
 
 def split(balance, value, remaining):
@@ -9,26 +10,40 @@ def split(balance, value, remaining):
         return 0, balance
     if value <= remaining:
         return balance, 0
-    yield_shares = balance * (value - remaining) // value
-    return balance - yield_shares, yield_shares
+    principal_shares = remaining * balance // value
+    if principal_shares * value // balance < remaining:
+        principal_shares += 1
+    return principal_shares, balance - principal_shares
 
 
 def payout(principal_shares, remaining_before, remaining_after):
     if remaining_after == 0:
         return principal_shares
-    numerator = principal_shares * remaining_after
-    reserve = numerator // remaining_before
-    if numerator % remaining_before:
+    whole = principal_shares // remaining_before
+    remainder = principal_shares % remaining_before
+    scaled_remainder = remainder * remaining_after
+    reserve = whole * remaining_after + scaled_remainder // remaining_before
+    if scaled_remainder % remaining_before:
         reserve += 1
     return principal_shares - reserve
+
+
+@st.composite
+def payout_cases(draw):
+    remaining_before = draw(st.integers(min_value=1, max_value=2**128 - 1))
+    return (
+        draw(st.integers(min_value=0, max_value=UINT256_MAX)),
+        remaining_before,
+        draw(st.integers(min_value=0, max_value=remaining_before)),
+    )
 
 
 @settings(deadline=None, max_examples=1_000)
 @given(
     principal=st.integers(min_value=1, max_value=2**128 - 1),
-    balance=st.integers(min_value=1, max_value=2**128 - 1),
+    balance=st.integers(min_value=1, max_value=UINT256_MAX),
     claim_bps=st.integers(min_value=0, max_value=10_000),
-    value=st.integers(min_value=1, max_value=2**128 - 1),
+    value=st.integers(min_value=1, max_value=UINT256_MAX),
 )
 def test_split_conserves_shares_and_rounds_toward_principal(
     principal,
@@ -48,6 +63,33 @@ def test_split_conserves_shares_and_rounds_toward_principal(
         # For a proportional ERC-4626 conversion, floor rounding leaves at least
         # the unclaimed principal after yield and vested shares are removed.
         assert remaining_shares * value // balance >= principal - claimable
+
+
+@settings(deadline=None, max_examples=1_000)
+@given(case=payout_cases())
+def test_payout_matches_exact_math_for_full_uint256_share_balance(case):
+    principal_shares, remaining_before, remaining_after = case
+    remainder = principal_shares % remaining_before
+
+    assert remainder * remaining_after <= UINT256_MAX
+    assert payout(principal_shares, remaining_before, remaining_after) == principal_shares - (
+        principal_shares * remaining_after + remaining_before - 1
+    ) // remaining_before
+
+
+@settings(deadline=None, max_examples=1_000)
+@given(
+    assets=st.integers(min_value=1, max_value=2**128 - 1),
+    assets_per_share=st.integers(min_value=1, max_value=2**128 - 1),
+)
+def test_one_share_round_up_is_the_minimum_principal_reserve(assets, assets_per_share):
+    principal_shares = assets * SCALE // assets_per_share
+    if principal_shares * assets_per_share // SCALE < assets:
+        principal_shares += 1
+
+    assert principal_shares * assets_per_share <= UINT256_MAX
+    assert principal_shares * assets_per_share // SCALE >= assets
+    assert principal_shares == 0 or (principal_shares - 1) * assets_per_share // SCALE < assets
 
 
 @settings(deadline=None, max_examples=500)

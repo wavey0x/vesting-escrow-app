@@ -218,3 +218,49 @@ def test_standard_mode_never_calls_vault_methods(vesting, token):
     assert vesting.claimable_yield() == 0
     with boa.reverts(dev="yield disabled"):
         vesting.claim_yield()
+
+
+def test_large_direct_donation_keeps_partial_claims_live(
+    chain,
+    vesting_target,
+    vyper_donation,
+    owner,
+    recipient,
+    accounts,
+):
+    maximum = 2**128 - 1
+    duration = 2**64 - 1
+    donation = 2**64 + 5
+    start = chain.pending_timestamp + 10
+    attacker = accounts[4]
+    token = deploy("test/MockToken", sender=owner)
+    factory = deploy("VestingEscrowFactory", vesting_target, vyper_donation, sender=owner)
+
+    token.mint(owner, maximum, sender=owner)
+    token.approve(factory, maximum, sender=owner)
+    escrow_address = factory.deploy_vesting_contract(
+        token,
+        recipient,
+        maximum,
+        duration,
+        start,
+        0,
+        True,
+        0,
+        owner,
+        False,
+        sender=owner,
+    )
+    escrow = at("VestingEscrowSimple", escrow_address)
+    token.mint(attacker, donation, sender=owner)
+    token.transfer(escrow, donation, sender=attacker)
+
+    chain.pending_timestamp = start + 1
+    vested = maximum // duration
+    balance = maximum + donation
+    expected = balance * vested // maximum
+
+    assert escrow.unclaimed() == expected
+    assert escrow.locked() == balance - expected
+    assert escrow.claim(sender=recipient) == expected
+    assert token.balanceOf(recipient) == expected

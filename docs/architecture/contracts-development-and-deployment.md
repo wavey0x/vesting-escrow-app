@@ -18,8 +18,8 @@ principal/yield split are conditional. This deliberately changes the future
 factory and escrow ABIs; deployed version 1 contracts remain immutable and are
 handled as historical integrations.
 
-Local validation covers compilation, 50 Titanoboa contract tests, Hypothesis
-accounting properties, frontend receipt decoding, and indexer event decoding.
+Local validation covers compilation, 52 Titanoboa functional tests, five
+integration/property tests, frontend receipt decoding, and indexer event decoding.
 Independent security review and a production deployment manifest are still
 required before mainnet release.
 
@@ -30,7 +30,8 @@ required before mainnet release.
 3. Recipient and yield destinations are fixed at creation.
 4. Standard mode never calls ERC-4626 methods.
 5. Yield mode transfers shares only; it never deposits or redeems assets.
-6. Rounding stays in the outstanding principal reserve.
+6. Rounding stays in the outstanding principal reserve, including when direct
+   transfers make the live token balance larger than the initial amount.
 7. State changes precede callback-capable token transfers.
 8. Existing factories and escrows are never modified or migrated.
 

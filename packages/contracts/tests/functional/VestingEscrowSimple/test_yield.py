@@ -11,16 +11,20 @@ def split(balance, value, remaining):
         return 0, balance
     if value <= remaining:
         return balance, 0
-    yield_shares = balance * (value - remaining) // value
-    return balance - yield_shares, yield_shares
+    principal_shares = remaining * balance // value
+    if principal_shares * value // balance < remaining:
+        principal_shares += 1
+    return principal_shares, balance - principal_shares
 
 
 def payout(principal_shares, remaining_before, remaining_after):
     if remaining_after == 0:
         return principal_shares
-    numerator = principal_shares * remaining_after
-    reserve = numerator // remaining_before
-    if numerator % remaining_before:
+    whole = principal_shares // remaining_before
+    remainder = principal_shares % remaining_before
+    scaled_remainder = remainder * remaining_after
+    reserve = whole * remaining_after + scaled_remainder // remaining_before
+    if scaled_remainder % remaining_before:
         reserve += 1
     return principal_shares - reserve
 
@@ -301,3 +305,48 @@ def test_repeated_claims_keep_rounding_in_the_reserve(
     chain.pending_timestamp = end_time
     yield_vesting.claim(sender=recipient)
     assert vault.balanceOf(yield_vesting) == 0
+
+
+def test_large_share_donation_keeps_yield_accounting_live(
+    chain,
+    vesting_factory,
+    owner,
+    recipient,
+    accounts,
+    asset_token,
+):
+    maximum = 2**128 - 1
+    donation = 2**129
+    duration = 1_000
+    start = chain.pending_timestamp + 10
+    attacker = accounts[4]
+    vault = deploy("test/MockERC4626", asset_token, sender=owner)
+
+    vault.mint(owner, maximum, sender=owner)
+    vault.approve(vesting_factory, maximum, sender=owner)
+    escrow_address = vesting_factory.deploy_vesting_contract(
+        vault,
+        recipient,
+        maximum,
+        duration,
+        start,
+        0,
+        True,
+        0,
+        owner,
+        True,
+        sender=owner,
+    )
+    escrow = at("VestingEscrowSimple", escrow_address)
+    vault.mint(attacker, donation, sender=owner)
+    vault.transfer(escrow, donation, sender=attacker)
+
+    chain.pending_timestamp = start + duration // 2
+    vested = maximum * (chain.pending_timestamp - start) // duration
+
+    assert escrow.claimable_yield() == donation
+    assert escrow.unclaimed() == vested
+    assert escrow.locked() == maximum - vested
+    assert escrow.claim_yield(sender=attacker) == donation
+    assert vault.balanceOf(owner) == donation
+    assert escrow.claim(sender=recipient) == vested
