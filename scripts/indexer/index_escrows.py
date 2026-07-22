@@ -2,8 +2,8 @@
 """
 Vesting Escrow Indexer
 
-Scans VestingEscrowFactory contracts for VestingEscrowCreated events
-and builds a JSON index of all escrows.
+Scans VestingEscrowFactory creation and configuration events and builds a JSON
+index of all escrows.
 
 Usage:
     MAINNET_RPC=https://... python scripts/indexer/index_escrows.py [--refresh-logos]
@@ -208,7 +208,7 @@ def load_existing_tokens() -> dict:
         }
 
 
-def event_to_escrow(event, factory: dict) -> dict:
+def event_to_escrow(event, factory: dict, configuration=None) -> dict:
     """Convert a web3.py event object to our escrow format."""
     args = event["args"]
     escrow = {
@@ -228,22 +228,44 @@ def event_to_escrow(event, factory: dict) -> dict:
     }
 
     if factory["version"] == 2:
-        escrow.update({
-            "yieldToOwner": args["yield_to_owner"],
-            "asset": args["asset"],
-            "yieldRecipient": args["owner"] if args["yield_to_owner"] else ZERO_ADDRESS,
-            "principal": str(args["principal"]),
-        })
+        if configuration is None:
+            raise ValueError(f"missing VestingEscrowConfigured event for {args['escrow']}")
+        config = configuration["args"]
+        escrow.update(
+            {
+                "yieldToOwner": config["yield_to_owner"],
+                "asset": config["asset"],
+                "yieldRecipient": config["owner"] if config["yield_to_owner"] else ZERO_ADDRESS,
+                "principal": str(config["principal"]),
+            }
+        )
     return escrow
 
 
 def fetch_events(contract, from_block: int, to_block: int, factory: dict) -> list:
     """Fetch creation events using the factory's versioned event ABI."""
-    created_events = contract.events.VestingEscrowCreated.get_logs(
+    created_events = contract.events.VestingEscrowCreated.get_logs(from_block=from_block, to_block=to_block)
+    if factory["version"] == 1:
+        return [event_to_escrow(event, factory) for event in created_events]
+
+    configured_events = contract.events.VestingEscrowConfigured.get_logs(
         from_block=from_block,
-        to_block=to_block
+        to_block=to_block,
     )
-    return [event_to_escrow(event, factory) for event in created_events]
+    configured_by_creation = {
+        (event["args"]["escrow"].lower(), event["transactionHash"].hex()): event
+        for event in configured_events
+    }
+    return [
+        event_to_escrow(
+            event,
+            factory,
+            configured_by_creation.get(
+                (event["args"]["escrow"].lower(), event["transactionHash"].hex())
+            ),
+        )
+        for event in created_events
+    ]
 
 
 DEFAULT_TOKEN_METADATA = {

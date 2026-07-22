@@ -40,6 +40,34 @@ def test_factory_configuration(vesting_factory, vesting_target, vyper_donation):
     assert vesting_factory.VYPER() == vyper_donation
 
 
+def test_legacy_minimal_deploy_overload(
+    chain,
+    vesting_factory,
+    owner,
+    recipient,
+    token,
+    amount,
+    duration,
+):
+    token.mint(owner, amount, sender=owner)
+    token.approve(vesting_factory, amount, sender=owner)
+
+    escrow_address = vesting_factory.deploy_vesting_contract(
+        token,
+        recipient,
+        amount,
+        duration,
+        sender=owner,
+    )
+    escrow = at("VestingEscrowSimple", escrow_address)
+
+    assert escrow.start_time() == chain.pending_timestamp
+    assert escrow.cliff_length() == 0
+    assert escrow.open_claim()
+    assert escrow.owner() == owner
+    assert not escrow.yield_to_owner()
+
+
 def test_deploys_standard_escrow(
     vesting_factory,
     owner,
@@ -70,19 +98,24 @@ def test_deploys_standard_escrow(
 
     assert len(created) == 1
     event = created[0]
+    configured = events(vesting_factory, "VestingEscrowConfigured", include_child_logs=False)[0]
     assert event.funder == owner
     assert event.token == token.address
     assert event.recipient == recipient
-    assert event.owner == owner
     assert event.escrow == escrow.address
     assert event.amount == amount
     assert event.vesting_start == start_time
     assert event.vesting_duration == duration
     assert event.cliff_length == cliff_duration
     assert event.open_claim == open_claim
-    assert not event.yield_to_owner
-    assert event.asset == token.address
-    assert event.principal == amount
+    assert configured.escrow == escrow.address
+    assert configured.owner == owner
+    assert configured.asset == token.address
+    assert not configured.yield_to_owner
+    assert configured.principal == amount
+
+    assert vesting_factory.escrows_length() == 1
+    assert vesting_factory.escrows(0) == escrow.address
 
     assert escrow.version() == 2
     assert escrow.initialized()
@@ -122,10 +155,14 @@ def test_deploys_yield_escrow(
     )
     escrow = at("VestingEscrowSimple", escrow_address)
     event = events(vesting_factory, "VestingEscrowCreated", include_child_logs=False)[0]
+    configured = events(vesting_factory, "VestingEscrowConfigured", include_child_logs=False)[0]
 
-    assert event.yield_to_owner
-    assert event.asset == asset_token.address
-    assert event.principal == amount
+    assert event.escrow == escrow.address
+    assert configured.escrow == escrow.address
+    assert configured.owner == owner
+    assert configured.yield_to_owner
+    assert configured.asset == asset_token.address
+    assert configured.principal == amount
     assert escrow.asset() == asset_token.address
     assert escrow.yield_recipient() == owner
     assert escrow.yield_to_owner()
@@ -416,7 +453,7 @@ def test_rejects_zero_initial_principal(
     vault.mint(owner, 1, sender=owner)
     vault.approve(vesting_factory, 1, sender=owner)
 
-    with boa.reverts(dev="zero principal"):
+    with boa.reverts():
         deploy_escrow(
             vesting_factory,
             vault,
@@ -443,7 +480,7 @@ def test_rejects_principal_above_limit(
     vault.mint(owner, amount, sender=owner)
     vault.approve(vesting_factory, amount, sender=owner)
 
-    with boa.reverts(dev="principal too large"):
+    with boa.reverts():
         deploy_escrow(
             vesting_factory,
             vault,

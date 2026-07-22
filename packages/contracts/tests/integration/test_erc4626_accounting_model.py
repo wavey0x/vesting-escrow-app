@@ -105,7 +105,7 @@ def test_one_share_round_up_is_the_minimum_principal_reserve(assets, assets_per_
         max_size=20,
     ),
 )
-def test_lifecycle_conserves_every_share_and_drains_at_completion(principal, actions):
+def test_lifecycle_conserves_every_share_and_explicit_yield_claim_drains(principal, actions):
     balance = principal
     remaining = principal
     distributed = 0
@@ -116,22 +116,28 @@ def test_lifecycle_conserves_every_share_and_drains_at_completion(principal, act
         total_shares += donation
         claimable = remaining * claim_bps // 10_000
         value = balance * assets_per_share // SCALE
-        principal_pool, yield_shares = split(balance, value, remaining)
+        remaining_before = remaining
+        principal_pool, _ = split(balance, value, remaining_before)
         claim_shares = payout(principal_pool, remaining, remaining - claimable)
-        balance -= yield_shares + claim_shares
+        balance -= claim_shares
         remaining -= claimable
-        distributed += yield_shares + claim_shares
+        distributed += claim_shares
 
         assert balance + distributed == total_shares
-        if value > remaining + claimable:
+        if value > remaining_before:
             assert balance * assets_per_share // SCALE >= remaining
 
     assets_per_share = actions[-1][0]
     value = balance * assets_per_share // SCALE
-    principal_pool, yield_shares = split(balance, value, remaining)
+    principal_pool, _ = split(balance, value, remaining)
     claim_shares = principal_pool
-    distributed += yield_shares + claim_shares
-    balance -= yield_shares + claim_shares
+    distributed += claim_shares
+    balance -= claim_shares
+
+    # Once principal reaches zero, every retained share is claimable yield.
+    yield_shares = balance
+    distributed += yield_shares
+    balance -= yield_shares
 
     assert balance == 0
     assert distributed == total_shares

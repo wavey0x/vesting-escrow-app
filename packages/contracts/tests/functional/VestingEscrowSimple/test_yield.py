@@ -1,7 +1,6 @@
 import boa
 
-from tests.helpers import ZERO_ADDRESS, at, deploy
-
+from tests.helpers import ZERO_ADDRESS, at, deploy, events
 
 SCALE = 10**18
 
@@ -55,7 +54,38 @@ def test_flat_rate_claims_shares(
     assert vault.balanceOf(yield_vesting) == 0
 
 
-def test_gain_is_paid_to_owner_and_reserve_is_preserved(
+def test_claim_accepts_recipient_selected_beneficiary(
+    chain,
+    yield_vesting,
+    recipient,
+    cold_storage,
+    vault,
+    start_time,
+    end_time,
+):
+    chain.pending_timestamp = start_time + (end_time - start_time) // 2
+
+    claimed = yield_vesting.claim(cold_storage, 2**256 - 1, sender=recipient)
+
+    assert claimed > 0
+    assert vault.balanceOf(cold_storage) == claimed
+
+
+def test_partial_share_cap_is_rejected(
+    chain,
+    yield_vesting,
+    recipient,
+    start_time,
+    end_time,
+):
+    chain.pending_timestamp = start_time + (end_time - start_time) // 2
+    claimable = yield_vesting.unclaimed()
+
+    with boa.reverts(dev="partial share claim"):
+        yield_vesting.claim(recipient, claimable - 1, sender=recipient)
+
+
+def test_regular_claim_preserves_yield_until_explicit_claim(
     chain,
     yield_vesting,
     recipient,
@@ -70,17 +100,27 @@ def test_gain_is_paid_to_owner_and_reserve_is_preserved(
     chain.pending_timestamp = midpoint
     vested = amount * (midpoint - start_time) // (end_time - start_time)
     balance = vault.balanceOf(yield_vesting)
-    principal_pool, yield_shares = split(balance, vault.convertToAssets(balance), amount)
+    principal_pool, _ = split(balance, vault.convertToAssets(balance), amount)
     expected_claim = payout(principal_pool, amount, amount - vested)
 
     assert yield_vesting.claim(sender=recipient) == expected_claim
+    assert events(yield_vesting, "YieldClaim") == []
     assert vault.balanceOf(recipient) == expected_claim
-    assert vault.balanceOf(owner) == yield_shares
-    assert vault.balanceOf(yield_vesting) == balance - expected_claim - yield_shares
+    assert vault.balanceOf(owner) == 0
+    assert vault.balanceOf(yield_vesting) == balance - expected_claim
+    assert yield_vesting.claimable_yield() > 0
     assert vault.convertToAssets(vault.balanceOf(yield_vesting)) >= amount - vested
 
     chain.pending_timestamp = end_time
     yield_vesting.claim(sender=recipient)
+    yield_shares = vault.balanceOf(yield_vesting)
+
+    assert yield_shares > 0
+    assert yield_vesting.claimable_yield() == yield_shares
+    assert vault.balanceOf(owner) == 0
+    assert vault.balanceOf(recipient) + yield_shares == amount
+
+    assert yield_vesting.claim_yield(sender=recipient) == yield_shares
     assert vault.balanceOf(yield_vesting) == 0
     assert vault.balanceOf(recipient) + vault.balanceOf(owner) == amount
 
@@ -228,9 +268,24 @@ def test_share_transfer_cannot_reenter_accounting(
     assert not vault.reentry_succeeded()
 
 
-def test_recover_cannot_remove_vault_shares(yield_vesting, owner, vault):
-    with boa.reverts(dev="protected token"):
-        yield_vesting.recover(vault, sender=owner)
+def test_collect_dust_cannot_remove_vault_shares(yield_vesting, recipient, vault):
+    with boa.reverts(dev="use claim_yield"):
+        yield_vesting.collect_dust(vault, sender=recipient)
+
+
+def test_collect_dust_recovers_unrelated_token(
+    yield_vesting,
+    owner,
+    recipient,
+    another_token,
+):
+    amount = 123
+    another_token.mint(yield_vesting, amount, sender=owner)
+
+    yield_vesting.collect_dust(another_token, sender=recipient)
+
+    assert another_token.balanceOf(recipient) == amount
+    assert another_token.balanceOf(yield_vesting) == 0
 
 
 def test_closed_claim_only_allows_recipient(
@@ -304,6 +359,13 @@ def test_repeated_claims_keep_rounding_in_the_reserve(
 
     chain.pending_timestamp = end_time
     yield_vesting.claim(sender=recipient)
+
+    yield_shares = vault.balanceOf(yield_vesting)
+    assert yield_shares > 0
+    assert yield_vesting.claimable_yield() == yield_shares
+    assert vault.balanceOf(owner) == 0
+
+    yield_vesting.claim_yield(sender=recipient)
     assert vault.balanceOf(yield_vesting) == 0
 
 

@@ -14,6 +14,7 @@ const COMMON_FUNCTIONS = [
   'start_time',
   'cliff_length',
   'open_claim',
+  'recipient',
 ] as const;
 
 export function useLiveEscrowData(escrowAddress?: string, yieldToOwner = false) {
@@ -49,8 +50,9 @@ export function useLiveEscrowData(escrowAddress?: string, yieldToOwner = false) 
       startTime: data[7].result as bigint,
       cliffLength: data[8].result as bigint,
       openClaim: data[9].result as boolean,
+      recipient: data[10].result as string,
       ...(yieldToOwner && {
-        claimableYield: data[10].result as bigint,
+        claimableYield: data[11].result as bigint,
       }),
     };
   }

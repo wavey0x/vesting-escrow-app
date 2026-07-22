@@ -43,6 +43,7 @@ export interface LiveEscrowData {
   startTime: bigint;
   cliffLength: bigint;
   openClaim: boolean;
+  recipient: string;
   claimableYield?: bigint;
 }
 

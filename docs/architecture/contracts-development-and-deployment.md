@@ -13,12 +13,11 @@ VestingEscrowFactory
         -> ERC-4626 share mode when yield_to_owner is true
 ```
 
-The public lifecycle is the same in both modes. Only valuation and the
-principal/yield split are conditional. This deliberately changes the future
-factory and escrow ABIs; deployed version 1 contracts remain immutable and are
-handled as historical integrations.
+The public lifecycle preserves the deployed version 1 ABI. ERC-4626 accounting,
+metadata, and the final factory argument are additive; only valuation and the
+principal/yield split are conditional.
 
-Local validation covers compilation, 52 Titanoboa functional tests, five
+Local validation covers compilation, 62 Titanoboa functional tests, five
 integration/property tests, frontend receipt decoding, and indexer event decoding.
 Independent security review and a production deployment manifest are still
 required before mainnet release.
@@ -27,11 +26,12 @@ required before mainnet release.
 
 1. A proxy is funded before its single initialization call.
 2. The implementation itself cannot be initialized.
-3. Recipient and yield destinations are fixed at creation.
+3. The yield destination is fixed at creation; standard-mode beneficiary
+   selection retains the deployed behavior.
 4. Standard mode never calls ERC-4626 methods.
 5. Yield mode transfers shares only; it never deposits or redeems assets.
-6. Rounding stays in the outstanding principal reserve, including when direct
-   transfers make the live token balance larger than the initial amount.
+6. Yield-mode rounding stays in the outstanding principal reserve, including
+   when direct transfers make the live share balance larger than the initial amount.
 7. State changes precede callback-capable token transfers.
 8. Existing factories and escrows are never modified or migrated.
 
@@ -48,7 +48,8 @@ MAINNET_RPC=https://... MAINNET_BLOCK=... .venv/bin/python scripts/fork_smoke.py
 
 Before freezing a release, review:
 
-- ABI, selectors, topics, storage layout, runtime size, and gas profile;
+- the automated legacy ABI subset check, selectors, topics, storage layout,
+  runtime size, and gas profile;
 - start, cliff, end, revoke, and disown boundaries;
 - partial-claim and rounding behavior across gains and losses;
 - non-returning, fee-charging, and callback-capable tokens;

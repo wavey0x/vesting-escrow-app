@@ -74,7 +74,8 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 - Balance and allowance checks include the optional Vyper donation.
 - The owner is the connected wallet; there is no separate owner input in the current UI.
 - Vault mode funding and claims use the ERC-4626 wrapper token as shares; the app never deposits or redeems underlying assets.
-- The app ABI-decodes the factory's single `VestingEscrowCreated` event from the receipt, caches the confirmed escrow, then routes to it.
+- Regular vault-mode claims transfer principal shares only. Yield remains in the escrow until `claim_yield()` or revocation sends it to the original owner.
+- The app ABI-decodes the compatible `VestingEscrowCreated` event and the additive `VestingEscrowConfigured` event from the receipt, caches the confirmed escrow, then routes to it.
 
 ## Data Model
 
@@ -97,6 +98,7 @@ The detail and list views read live escrow state on demand:
 - `start_time`
 - `cliff_length`
 - `open_claim`
+- `recipient`
 - Yield mode only: `claimable_yield`
 
 Immutable yield-mode metadata (`asset`, `yieldRecipient`, and initial

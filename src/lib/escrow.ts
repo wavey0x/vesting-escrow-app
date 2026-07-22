@@ -171,6 +171,7 @@ export function mergeEscrowData(
     ...indexed,
     live,
     openClaim: live?.openClaim ?? indexed.openClaim,
+    recipient: live?.recipient ?? indexed.recipient,
   };
   escrow.status = getEscrowStatus(escrow);
   return escrow;

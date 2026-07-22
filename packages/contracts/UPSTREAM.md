@@ -14,9 +14,9 @@ not a nested Git repository or a Git submodule.
 
 ## Local divergence
 
-Commit `f3dcdd8` records the last all-Vyper-0.3.10 snapshot. At that commit,
-compiling with the Curve constructor values produced factory and target runtime
-bytecode hashes matching the verified Curve deployment at factory
+Commit `98a363c` records the deployed version 1 baseline. At that commit,
+compiling with Vyper 0.3.10 and the Curve constructor values produced factory
+and target runtime bytecode hashes matching the verified Curve deployment at factory
 `0xcf61782465Ff973638143d6492B51A85986aB347` and target
 `0x9dd5cF263327e2D6a608da8c30368Eb27514bAD2`.
 
@@ -26,16 +26,16 @@ The current unreleased source is a deliberate versioned redesign:
   vesting and optional ERC-4626 share accounting;
 - one factory target replaces separate legacy/current implementation routing;
 - proxies are funded before one-time initialization;
-- recipient and yield destinations are fixed, and claims have no destination
-  arguments;
-- the factory emits one complete creation event and keeps no redundant escrow
-  registry;
+- the deployed escrow and factory ABIs remain a subset of the new ABIs;
+- standard mode retains claim, revoke, beneficiary, dust, and factory-registry
+  behavior while yield mode adds principal/share accounting;
+- the factory preserves `VestingEscrowCreated` and emits an additive
+  `VestingEscrowConfigured` metadata event;
 - Titanoboa tests replace the imported Ape suite.
 
-This changes ABI and bytecode intentionally. Deployed version 1 contracts are
-preserved as historical frontend/indexer integrations rather than retained as
-editable source. The unreleased changes must not be overwritten during an
-upstream sync.
+This changes bytecode while keeping the deployed public ABI compatible.
+Deployed version 1 contracts remain historical frontend/indexer integrations.
+The unreleased changes must not be overwritten during an upstream sync.
 
 The upstream workflow was replaced by the root monorepo workflow. Its stale
 development spec and redundant local demo deployment were omitted; the current

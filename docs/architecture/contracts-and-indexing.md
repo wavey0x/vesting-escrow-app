@@ -28,7 +28,8 @@ original immutable implementation and are never upgraded.
 2. transfer the exact escrow amount directly into it;
 3. initialize it once;
 4. transfer any optional Vyper donation;
-5. emit one complete creation event.
+5. append it to the on-chain escrow registry;
+6. emit the compatible creation event and additive configuration event.
 
 The constructor is:
 
@@ -56,32 +57,41 @@ deploy_vesting_contract(
 `support_vyper` is expressed in basis points and cannot exceed 10,000. The
 frontend currently offers either zero or 100 basis points.
 
-### Creation event
+### Creation events
 
-Version 2 emits one self-contained event. `funder`, `token`, and `recipient`
-are indexed.
+Version 2 preserves the original creation event exactly. `funder`, `token`, and
+`recipient` are indexed, so existing event consumers keep the same topic and
+decoding schema.
 
 ```text
 VestingEscrowCreated(
     funder,
     token,
     recipient,
-    owner,
     escrow,
     amount,
     vesting_start,
     vesting_duration,
     cliff_length,
     open_claim,
-    yield_to_owner,
+)
+```
+
+An additive event supplies version 2 metadata without changing the historical
+event topic:
+
+```text
+VestingEscrowConfigured(
+    escrow,
+    owner,
     asset,
+    yield_to_owner,
     principal,
 )
 ```
 
-Historical factories retain their shorter version 1 event. Consumers select
-the event ABI from the factory version in `config/deployments.json`; there is no
-event join or runtime ABI guessing.
+Version 2 consumers join these logs by escrow address and transaction hash.
+Historical factories emit only `VestingEscrowCreated`.
 
 ## VestingEscrowSimple
 
@@ -101,16 +111,24 @@ Amounts and initial principal are limited to `uint128`; duration is limited to
 cannot be rejected, so balance-dependent accounting does not rely on the
 initial amount bound.
 
-Both modes use the same fixed destinations and actions:
+The lifecycle retains the deployed overloads:
 
 ```text
-claim()          -> all currently vested principal to recipient
-claim_yield()    -> current yield shares to original owner
-revoke()         -> unvested principal and current yield to owner
-disown()         -> permanently remove revoke authority
-set_open_claim() -> recipient controls third-party claim triggering
-recover(token)   -> unrelated tokens to recipient
+claim(beneficiary=msg.sender, amount=max) -> vested tokens or principal shares
+claim_yield()                            -> current yield shares to original owner
+revoke(ts=block.timestamp, beneficiary=msg.sender)
+                                         -> unvested tokens or vault shares
+disown()                                 -> permanently remove revoke authority
+set_open_claim()                         -> recipient controls third-party claims
+collect_dust(token, beneficiary=msg.sender)
+                                         -> tokens not reserved for vesting
 ```
+
+Standard mode preserves the original partial-claim, beneficiary, revoke, and
+dust behavior. Yield mode supports full scheduled claims, keeps vault shares
+out of `collect_dust`, and reserves yield for the original owner. Regular
+claims transfer principal only; yield moves only through `claim_yield()` or as
+part of an owner-initiated revocation.
 
 Funding and payouts always use `token`. In yield mode that token is the vault
 wrapper; the escrow never deposits, withdraws, or redeems underlying assets.
@@ -151,10 +169,12 @@ principal; gains above principal go to the original owner.
 
 ## Frontend compatibility
 
-The frontend uses the factory version for writes and event decoding:
+The frontend uses the factory version for deployment and event decoding:
 
-- version 1: historical factory/event ABI and `claim(recipient, amount)`;
-- version 2: current factory/event ABI and fixed-destination `claim()`;
+- both versions claim through `claim(recipient, max_value(uint256))`;
+- claim calldata uses the live on-chain `recipient()`, never indexed metadata;
+- version 1 reads the historical creation event;
+- version 2 joins the compatible creation event with its configuration event;
 - yield controls are shown only when `yield_to_owner` is enabled.
 
 Confirmed creations are retained in a seven-day local cache until the public
@@ -170,9 +190,9 @@ abi/VestingEscrowFactory.json        current event
 index_escrows.py                     scanner and generator
 ```
 
-Each indexed record carries its factory address and explicit version. Current
-records also include `yieldToOwner`, `asset`, `yieldRecipient`, and `principal`
-directly from the creation event.
+Each indexed record carries its factory address and explicit version. Version 2
+records join same-transaction creation and configuration events to add
+`yieldToOwner`, `asset`, `yieldRecipient`, and `principal`.
 
 `public/data/escrows.json` and `public/data/tokens.json` are generated files.
 Only `scripts/indexer/index_escrows.py` may update them.

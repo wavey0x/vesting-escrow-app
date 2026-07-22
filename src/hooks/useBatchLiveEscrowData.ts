@@ -8,10 +8,10 @@ import { escrowReadAbi } from '../lib/contracts';
 
 // Max escrows per batch for multicall
 // readContracts uses Multicall3 contract automatically (1 RPC call per batch)
-// 15 escrows × 10 functions = 150 calls per multicall - balanced for response size limits
+// 15 escrows × 11 functions = 165 calls per multicall - balanced for response size limits
 const MAX_ESCROWS_PER_BATCH = 15;
 
-const FUNCTIONS_PER_ESCROW = 10;
+const FUNCTIONS_PER_ESCROW = 11;
 
 // Split array into chunks
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -35,6 +35,7 @@ function buildContracts(addresses: string[]) {
     { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'start_time' as const },
     { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'cliff_length' as const },
     { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'open_claim' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'recipient' as const },
   ]);
 }
 
@@ -61,6 +62,7 @@ function parseBatchResults(
         startTime: escrowData[7].result as bigint,
         cliffLength: escrowData[8].result as bigint,
         openClaim: escrowData[9].result as boolean,
+        recipient: escrowData[10].result as string,
       };
     }
   });

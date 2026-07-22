@@ -86,12 +86,9 @@ def initialize(
     end_time: uint256,
     cliff_length: uint256,
     open_claim: bool,
-    yield_to_owner: bool,
-) -> (address, uint256):
-    """
-    @notice Initialize a funded minimal proxy
-    @return The accounting asset and initial principal
-    """
+    yield_to_owner: bool = False,
+) -> bool:
+    """Initialize a funded minimal proxy."""
     assert not self.initialized  # dev: can only initialize once
     self.initialized = True
 
@@ -105,11 +102,10 @@ def initialize(
     assert cliff_length <= duration  # dev: invalid cliff
     assert staticcall token.balanceOf(self) >= amount  # dev: escrow not funded
 
-    asset: address = token.address
     principal: uint256 = amount
     yield_recipient: address = empty(address)
     if yield_to_owner:
-        asset = staticcall token.asset()
+        asset: address = staticcall token.asset()
         assert asset != empty(address)  # dev: invalid asset
         principal = staticcall token.convertToAssets(amount)
         assert principal > 0  # dev: zero principal
@@ -129,7 +125,7 @@ def initialize(
     self.yield_recipient = yield_recipient
     self.yield_to_owner = yield_to_owner
 
-    return asset, principal
+    return True
 
 
 @internal
@@ -157,10 +153,8 @@ def _claimable_principal(time: uint256) -> uint256:
 
 @internal
 @view
-def _split(remaining: uint256) -> (uint256, uint256):
+def _split_yield(remaining: uint256) -> (uint256, uint256):
     balance: uint256 = staticcall self.token.balanceOf(self)
-    if not self.yield_to_owner:
-        return balance, 0
     if remaining == 0:
         return 0, balance
 
@@ -203,7 +197,7 @@ def _unclaimed_shares(time: uint256) -> uint256:
 
     principal_shares: uint256 = 0
     ignored_yield: uint256 = 0
-    principal_shares, ignored_yield = self._split(remaining)
+    principal_shares, ignored_yield = self._split_yield(remaining)
     return self._payout_shares(principal_shares, remaining, remaining - claimable)
 
 
@@ -230,20 +224,27 @@ def claimable_principal() -> uint256:
 @external
 @view
 def unclaimed() -> uint256:
-    return self._unclaimed_shares(min(block.timestamp, self.disabled_at))
+    time: uint256 = min(block.timestamp, self.disabled_at)
+    if not self.yield_to_owner:
+        return self._total_vested_at(time) - self.total_claimed
+    return self._unclaimed_shares(time)
 
 
 @external
 @view
 def locked() -> uint256:
+    time: uint256 = min(block.timestamp, self.disabled_at)
+    if not self.yield_to_owner:
+        return self._total_vested_at(self.disabled_at) - self._total_vested_at(time)
+
     remaining: uint256 = self._remaining_principal()
     if remaining == 0:
         return 0
 
     principal_shares: uint256 = 0
     ignored_yield: uint256 = 0
-    principal_shares, ignored_yield = self._split(remaining)
-    return principal_shares - self._unclaimed_shares(min(block.timestamp, self.disabled_at))
+    principal_shares, ignored_yield = self._split_yield(remaining)
+    return principal_shares - self._unclaimed_shares(time)
 
 
 @external
@@ -253,38 +254,47 @@ def claimable_yield() -> uint256:
         return 0
     ignored_principal: uint256 = 0
     yield_shares: uint256 = 0
-    ignored_principal, yield_shares = self._split(self._remaining_principal())
+    ignored_principal, yield_shares = self._split_yield(self._remaining_principal())
     return yield_shares
 
 
 @external
 @nonreentrant
-def claim() -> uint256:
-    """Claim all currently vested principal to the fixed recipient."""
+def claim(
+    beneficiary: address = msg.sender,
+    amount: uint256 = max_value(uint256),
+) -> uint256:
+    """Claim vested tokens or principal shares."""
     assert self.initialized  # dev: not initialized
     recipient: address = self.recipient
-    assert msg.sender == recipient or self.open_claim  # dev: not authorized
+    assert msg.sender == recipient or self.open_claim and beneficiary == recipient  # dev: not authorized
+
+    claim_period_end: uint256 = min(block.timestamp, self.disabled_at)
+    if not self.yield_to_owner:
+        claimable: uint256 = min(self._total_vested_at(claim_period_end) - self.total_claimed, amount)
+        self.total_claimed += claimable
+        self.principal_claimed += claimable
+
+        assert extcall self.token.transfer(beneficiary, claimable, default_return_value=True)
+        log Claim(recipient=beneficiary, claimed=claimable)
+        return claimable
 
     remaining: uint256 = self._remaining_principal()
-    claimable: uint256 = self._claimable_principal(min(block.timestamp, self.disabled_at))
-    assert claimable > 0  # dev: nothing to claim
+    claimable: uint256 = self._claimable_principal(claim_period_end)
 
     principal_shares: uint256 = 0
-    yield_shares: uint256 = 0
-    principal_shares, yield_shares = self._split(remaining)
+    ignored_yield: uint256 = 0
+    principal_shares, ignored_yield = self._split_yield(remaining)
     claim_shares: uint256 = self._payout_shares(principal_shares, remaining, remaining - claimable)
-    assert claim_shares > 0  # dev: nothing to claim
+    assert amount >= claim_shares  # dev: partial share claim
 
     self.principal_claimed += claimable
     self.total_claimed += claim_shares
 
-    assert extcall self.token.transfer(recipient, claim_shares, default_return_value=True)
-    if yield_shares > 0:
-        assert extcall self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
+    if claim_shares > 0:
+        assert extcall self.token.transfer(beneficiary, claim_shares, default_return_value=True)
 
-    log Claim(recipient=recipient, claimed=claim_shares)
-    if yield_shares > 0:
-        log YieldClaim(recipient=self.yield_recipient, claimed=yield_shares)
+    log Claim(recipient=beneficiary, claimed=claim_shares)
     return claim_shares
 
 
@@ -297,7 +307,7 @@ def claim_yield() -> uint256:
     remaining: uint256 = self._remaining_principal()
     ignored_principal: uint256 = 0
     yield_shares: uint256 = 0
-    ignored_principal, yield_shares = self._split(remaining)
+    ignored_principal, yield_shares = self._split_yield(remaining)
 
     if yield_shares > 0:
         assert extcall self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
@@ -307,30 +317,43 @@ def claim_yield() -> uint256:
 
 @external
 @nonreentrant
-def revoke():
-    """Stop vesting now and return unvested principal and current yield to the owner."""
+def revoke(
+    ts: uint256 = block.timestamp,
+    beneficiary: address = msg.sender,
+):
+    """Stop vesting and return unvested wrapper tokens."""
     owner: address = self.owner
     assert msg.sender == owner  # dev: not owner
-    assert block.timestamp < self.end_time  # dev: vesting complete
+    assert ts >= block.timestamp and ts < self.end_time  # dev: no back to the future
+
+    if not self.yield_to_owner:
+        ruggable: uint256 = self._total_vested_at(self.disabled_at) - self._total_vested_at(ts)
+        self.disabled_at = ts
+        self.owner = empty(address)
+
+        assert extcall self.token.transfer(beneficiary, ruggable, default_return_value=True)
+        log Disowned(owner=owner)
+        log Revoked(recipient=self.recipient, owner=owner, rugged=ruggable, ts=ts)
+        return
 
     remaining: uint256 = self.total_principal - self.principal_claimed
-    recipient_remaining: uint256 = self._total_vested_at(block.timestamp) - self.principal_claimed
+    recipient_remaining: uint256 = self._total_vested_at(ts) - self.principal_claimed
     principal_shares: uint256 = 0
     yield_shares: uint256 = 0
-    principal_shares, yield_shares = self._split(remaining)
+    principal_shares, yield_shares = self._split_yield(remaining)
     clawback_shares: uint256 = self._payout_shares(principal_shares, remaining, recipient_remaining)
 
-    self.disabled_at = block.timestamp
+    self.disabled_at = ts
     self.owner = empty(address)
 
-    owner_shares: uint256 = clawback_shares + yield_shares
-    if owner_shares > 0:
-        assert extcall self.token.transfer(owner, owner_shares, default_return_value=True)
+    if clawback_shares > 0:
+        assert extcall self.token.transfer(beneficiary, clawback_shares, default_return_value=True)
     if yield_shares > 0:
+        assert extcall self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
         log YieldClaim(recipient=self.yield_recipient, claimed=yield_shares)
 
     log Disowned(owner=owner)
-    log Revoked(recipient=self.recipient, owner=owner, rugged=clawback_shares, ts=block.timestamp)
+    log Revoked(recipient=self.recipient, owner=owner, rugged=clawback_shares, ts=ts)
 
 
 @external
@@ -350,9 +373,29 @@ def set_open_claim(open_claim: bool):
 
 @external
 @nonreentrant
-def recover(token: IERC20):
-    """Send an unrelated token balance to the fixed recipient."""
-    assert token.address != self.token.address  # dev: protected token
+def collect_dust(
+    token: IERC20,
+    beneficiary: address = msg.sender,
+):
+    """Recover tokens that are not reserved for vesting."""
+    assert self.initialized  # dev: not initialized
+    recipient: address = self.recipient
+    assert msg.sender == recipient or self.open_claim and beneficiary == recipient  # dev: not authorized
+
+    protected_balance: uint256 = 0
+    if self.yield_to_owner:
+        protected_balance = staticcall self.token.balanceOf(self)
     amount: uint256 = staticcall token.balanceOf(self)
-    if amount > 0:
-        assert extcall token.transfer(self.recipient, amount, default_return_value=True)
+    if token.address == self.token.address:
+        assert not self.yield_to_owner  # dev: use claim_yield
+        required: uint256 = self._total_vested_at(self.disabled_at) - self.total_claimed
+        assert amount >= required  # dev: insolvent
+        amount -= required
+
+    assert extcall token.transfer(beneficiary, amount, default_return_value=True)
+    balance_after: uint256 = staticcall self.token.balanceOf(self)
+    if self.yield_to_owner:
+        assert balance_after >= protected_balance
+    else:
+        required_balance: uint256 = self._total_vested_at(self.disabled_at) - self.total_claimed
+        assert balance_after >= required_balance

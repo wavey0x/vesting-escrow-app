@@ -11,8 +11,31 @@ SPEC.loader.exec_module(INDEXER)
 
 
 class HexValue:
+    def __init__(self, value="01" * 32):
+        self.value = value
+
     def hex(self):
-        return "01" * 32
+        return self.value
+
+
+class EventReader:
+    def __init__(self, logs):
+        self.logs = logs
+
+    def get_logs(self, **_kwargs):
+        return self.logs
+
+
+class FactoryContract:
+    def __init__(self, created, configured):
+        self.events = type(
+            "Events",
+            (),
+            {
+                "VestingEscrowCreated": EventReader(created),
+                "VestingEscrowConfigured": EventReader(configured),
+            },
+        )()
 
 
 def creation_event(**overrides):
@@ -31,6 +54,21 @@ def creation_event(**overrides):
     return {
         "args": args,
         "blockNumber": 42,
+        "transactionHash": HexValue(),
+    }
+
+
+def configuration_event(**overrides):
+    args = {
+        "escrow": "0x0000000000000000000000000000000000000001",
+        "owner": "0x0000000000000000000000000000000000000006",
+        "yield_to_owner": False,
+        "asset": "0x0000000000000000000000000000000000000003",
+        "principal": 1000,
+    }
+    args.update(overrides)
+    return {
+        "args": args,
         "transactionHash": HexValue(),
     }
 
@@ -60,13 +98,9 @@ class IndexerIntegrationTests(unittest.TestCase):
             "version": 2,
         }
         escrow = INDEXER.event_to_escrow(
-            creation_event(
-                owner="0x0000000000000000000000000000000000000006",
-                yield_to_owner=False,
-                asset="0x0000000000000000000000000000000000000003",
-                principal=1000,
-            ),
+            creation_event(),
             factory,
+            configuration_event(),
         )
 
         self.assertEqual(escrow["version"], 2)
@@ -81,18 +115,51 @@ class IndexerIntegrationTests(unittest.TestCase):
             "version": 2,
         }
         escrow = INDEXER.event_to_escrow(
-            creation_event(
+            creation_event(),
+            factory,
+            configuration_event(
                 owner=owner,
                 yield_to_owner=True,
                 asset="0x0000000000000000000000000000000000000007",
                 principal=900,
             ),
-            factory,
         )
 
         self.assertTrue(escrow["yieldToOwner"])
         self.assertEqual(escrow["yieldRecipient"], owner)
         self.assertEqual(escrow["principal"], "900")
+
+    def test_current_creation_requires_configuration_event(self):
+        factory = {
+            "address": "0x0000000000000000000000000000000000000005",
+            "version": 2,
+        }
+        with self.assertRaisesRegex(ValueError, "missing VestingEscrowConfigured"):
+            INDEXER.event_to_escrow(creation_event(), factory)
+
+    def test_fetch_events_joins_configuration_by_escrow(self):
+        factory = {
+            "address": "0x0000000000000000000000000000000000000005",
+            "version": 2,
+        }
+        contract = FactoryContract([creation_event()], [configuration_event(yield_to_owner=True)])
+
+        escrows = INDEXER.fetch_events(contract, 1, 2, factory)
+
+        self.assertEqual(len(escrows), 1)
+        self.assertTrue(escrows[0]["yieldToOwner"])
+
+    def test_fetch_events_requires_configuration_from_creation_transaction(self):
+        factory = {
+            "address": "0x0000000000000000000000000000000000000005",
+            "version": 2,
+        }
+        configured = configuration_event()
+        configured["transactionHash"] = HexValue("02" * 32)
+        contract = FactoryContract([creation_event()], [configured])
+
+        with self.assertRaisesRegex(ValueError, "missing VestingEscrowConfigured"):
+            INDEXER.fetch_events(contract, 1, 2, factory)
 
 
 if __name__ == "__main__":

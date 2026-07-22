@@ -31,8 +31,7 @@ import {
   isOwner,
   isRecipient,
 } from '../lib/escrow';
-import { claimAbi, legacyClaimAbi, yieldClaimAbi } from '../lib/contracts';
-import type { EscrowVersion } from '../lib/types';
+import { claimAbi, yieldClaimAbi } from '../lib/contracts';
 
 function formatDaysUntil(timestamp: number, now: number): string {
   const targetDate = new Date(timestamp * 1000);
@@ -319,7 +318,6 @@ export default function EscrowDetail() {
           canClaim={showClaim}
           escrowAddress={escrow.address}
           recipient={escrow.recipient}
-          version={version}
           onSuccess={() => refetch()}
         />
         <AmountCard
@@ -475,7 +473,6 @@ function ClaimableCard({
   canClaim: isClaimable,
   escrowAddress,
   recipient,
-  version,
   onSuccess,
 }: {
   amount: bigint;
@@ -485,7 +482,6 @@ function ClaimableCard({
   canClaim: boolean;
   escrowAddress: string;
   recipient: string;
-  version: EscrowVersion;
   onSuccess?: () => void;
 }) {
   const { data: hash, isPending, writeContract, error, reset } = useWriteContract();
@@ -495,20 +491,12 @@ function ClaimableCard({
   const onSuccessRef = useRef(onSuccess);
 
   const handleClaim = () => {
-    if (version === 2) {
-      writeContract({
-        address: escrowAddress as ViemAddress,
-        abi: claimAbi,
-        functionName: 'claim',
-      });
-    } else {
-      writeContract({
-        address: escrowAddress as ViemAddress,
-        abi: legacyClaimAbi,
-        functionName: 'claim',
-        args: [recipient as ViemAddress, maxUint256],
-      });
-    }
+    writeContract({
+      address: escrowAddress as ViemAddress,
+      abi: claimAbi,
+      functionName: 'claim',
+      args: [recipient as ViemAddress, maxUint256],
+    });
   };
 
   useEffect(() => {
