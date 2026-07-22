@@ -88,13 +88,25 @@ def initialize(
     open_claim: bool,
     yield_to_owner: bool = False,
 ) -> bool:
-    """Initialize a funded minimal proxy."""
+    """
+    @notice Initialize a funded minimal proxy
+    @dev Called once by `VestingEscrowFactory.deploy_vesting_contract`
+    @param owner Revocation authority and, in yield mode, fixed yield recipient
+    @param token ERC-20 token or ERC-4626 share token held by the escrow
+    @param recipient Address receiving vested tokens or principal shares
+    @param amount Number of tokens or shares funded into the escrow
+    @param start_time Timestamp when vesting begins
+    @param end_time Timestamp when vesting completes
+    @param cliff_length Seconds after `start_time` before the first claim
+    @param open_claim Whether anyone may trigger claims to `recipient`
+    @param yield_to_owner Whether `token` uses ERC-4626 principal/yield accounting
+    """
     assert not self.initialized  # dev: can only initialize once
     self.initialized = True
 
     assert amount > 0  # dev: amount must be > 0
     assert amount <= MAX_AMOUNT  # dev: amount too large
-    assert owner != empty(address)  # dev: invalid owner
+    assert not yield_to_owner or owner != empty(address)  # dev: invalid yield recipient
     assert recipient not in [empty(address), self, token.address, owner]  # dev: invalid recipient
     assert end_time > block.timestamp and end_time > start_time  # dev: invalid vesting period
     duration: uint256 = end_time - start_time

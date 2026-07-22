@@ -88,7 +88,7 @@ def deploy_vesting_contract(
     assert support_vyper <= BPS  # dev: donation exceeds 100%
     assert amount > 0  # dev: amount must be > 0
     assert amount <= MAX_AMOUNT  # dev: amount too large
-    assert owner != empty(address)  # dev: invalid owner
+    assert not yield_to_owner or owner != empty(address)  # dev: invalid yield recipient
     assert vesting_duration > 0  # dev: invalid vesting period
     assert vesting_duration <= MAX_DURATION  # dev: duration too long
     assert cliff_length <= vesting_duration  # dev: invalid cliff

@@ -317,7 +317,7 @@ def test_rejects_invalid_recipient(
         )
 
 
-def test_rejects_invalid_owner(
+def test_zero_owner_is_allowed_in_standard_mode(
     vesting_factory,
     owner,
     recipient,
@@ -329,16 +329,46 @@ def test_rejects_invalid_owner(
     token.mint(owner, amount, sender=owner)
     token.approve(vesting_factory, amount, sender=owner)
 
-    with boa.reverts(dev="invalid owner"):
+    escrow_address = deploy_escrow(
+        vesting_factory,
+        token,
+        owner,
+        recipient,
+        ZERO_ADDRESS,
+        amount,
+        duration,
+        start_time,
+    )
+    escrow = at("VestingEscrowSimple", escrow_address)
+
+    assert escrow.owner() == ZERO_ADDRESS
+    assert escrow.yield_recipient() == ZERO_ADDRESS
+    assert not escrow.yield_to_owner()
+
+
+def test_yield_mode_requires_nonzero_owner(
+    vesting_factory,
+    owner,
+    recipient,
+    vault,
+    amount,
+    duration,
+    start_time,
+):
+    vault.mint(owner, amount, sender=owner)
+    vault.approve(vesting_factory, amount, sender=owner)
+
+    with boa.reverts(dev="invalid yield recipient"):
         deploy_escrow(
             vesting_factory,
-            token,
+            vault,
             owner,
             recipient,
             ZERO_ADDRESS,
             amount,
             duration,
             start_time,
+            yield_to_owner=True,
         )
 
 
