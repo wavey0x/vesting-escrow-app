@@ -16,23 +16,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Count escrows before indexing
-        id: before
-        run: |
-          echo "count=$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path('public/data/escrows.json')
-          if not path.exists():
-              print(0)
-          else:
-              with path.open() as f:
-                  data = json.load(f)
-              print(len(data.get('escrows', [])))
-          PY
-          )" >> "$GITHUB_OUTPUT"
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -52,40 +35,9 @@ jobs:
         env:
           MAINNET_RPC: ${{ secrets.MAINNET_RPC }}
 
-      - name: Count escrows after indexing
-        id: after
-        run: |
-          echo "count=$(python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          path = Path('public/data/escrows.json')
-          if not path.exists():
-              print(0)
-          else:
-              with path.open() as f:
-                  data = json.load(f)
-              print(len(data.get('escrows', [])))
-          PY
-          )" >> "$GITHUB_OUTPUT"
-
-      - name: Compute new escrow count
-        id: delta
-        run: |
-          before=${{ steps.before.outputs.count }}
-          after=${{ steps.after.outputs.count }}
-          new_escrows=$((after - before))
-          if [ "$new_escrows" -gt 0 ]; then
-            echo "has_new_escrows=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_new_escrows=false" >> "$GITHUB_OUTPUT"
-          fi
-          echo "new_escrows=$new_escrows" >> "$GITHUB_OUTPUT"
-
       - name: Commit updated index
-        if: steps.delta.outputs.has_new_escrows == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: index ${{ steps.delta.outputs.new_escrows }} new escrow(s) [skip ci]"
+          commit_message: "chore: refresh escrow index [skip ci]"
           file_pattern: "public/data/escrows.json public/data/tokens.json"
           commit_author: "GitHub Actions <actions@github.com>"

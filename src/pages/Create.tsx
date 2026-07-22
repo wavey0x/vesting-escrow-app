@@ -1,30 +1,18 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { Address, parseUnits, isAddress, maxUint256 } from 'viem';
 import Button from '../components/Button';
-import { FACTORY_ADDRESS, DURATION_PRESETS, DURATION_UNITS } from '../lib/constants';
+import { CHAIN_ID, FACTORY_ADDRESS, DURATION_PRESETS, DURATION_UNITS } from '../lib/constants';
 import TokenAmount from '../components/TokenAmount';
-
-const factoryAbi = [
-  {
-    name: 'deploy_vesting_contract',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'token', type: 'address' },
-      { name: 'recipient', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'vesting_duration', type: 'uint256' },
-      { name: 'vesting_start', type: 'uint256' },
-      { name: 'cliff_length', type: 'uint256' },
-      { name: 'open_claim', type: 'bool' },
-      { name: 'support_vyper', type: 'uint256' },
-      { name: 'owner', type: 'address' },
-    ],
-    outputs: [{ type: 'address' }],
-  },
-] as const;
+import {
+  ACTIVE_FACTORY,
+  decodeCreatedEscrow,
+  factoryAbi,
+  legacyFactoryAbi,
+  requiredFunding,
+} from '../lib/contracts';
+import { savePendingEscrow } from '../lib/pendingEscrows';
 
 // Vyper donation amount in basis points (100 = 1%)
 const VYPER_DONATION_BPS = 100n;
@@ -77,7 +65,7 @@ type Step = 'form' | 'approve' | 'deploy' | 'success';
 
 export default function Create() {
   const navigate = useNavigate();
-  const { address: userAddress, isConnected } = useAccount();
+  const { address: userAddress, chainId, isConnected } = useAccount();
 
   // Form state
   const [tokenAddress, setTokenAddress] = useState('');
@@ -91,6 +79,7 @@ export default function Create() {
   const [startDate, setStartDate] = useState('');
   const [openClaim, setOpenClaim] = useState(false);
   const [supportVyper, setSupportVyper] = useState(false);
+  const [yieldToOwner, setYieldToOwner] = useState(false);
 
   const [step, setStep] = useState<Step>('form');
   const [createdEscrow, setCreatedEscrow] = useState<string>('');
@@ -145,8 +134,13 @@ export default function Create() {
     }
   }, [amount, decimals]);
 
-  const needsApproval = tokenAllowance !== undefined && amountParsed > tokenAllowance;
-  const hasBalance = tokenBalance !== undefined && amountParsed <= tokenBalance;
+  const donationBps = supportVyper ? VYPER_DONATION_BPS : 0n;
+  const fundingRequired = requiredFunding(amountParsed, donationBps);
+  const needsApproval = tokenAllowance !== undefined && fundingRequired > tokenAllowance;
+  const hasBalance = tokenBalance !== undefined && fundingRequired <= tokenBalance;
+  const tokenDataReady =
+    tokenDecimals !== undefined && tokenBalance !== undefined && tokenAllowance !== undefined;
+  const isCorrectChain = chainId === CHAIN_ID;
 
   // Approve transaction
   const {
@@ -154,6 +148,7 @@ export default function Create() {
     isPending: approvePending,
     writeContract: approve,
     error: approveError,
+    reset: resetApprove,
   } = useWriteContract();
 
   const { isLoading: approveConfirming, isSuccess: approveSuccess } =
@@ -165,6 +160,7 @@ export default function Create() {
     isPending: deployPending,
     writeContract: deploy,
     error: deployError,
+    reset: resetDeploy,
   } = useWriteContract();
 
   const { isLoading: deployConfirming, isSuccess: deploySuccess, data: deployReceipt } =
@@ -186,42 +182,80 @@ export default function Create() {
   const handleDeploy = () => {
     if (!validTokenAddress || !isAddress(recipient) || !userAddress) return;
     setStep('deploy');
-    deploy({
-      address: FACTORY_ADDRESS,
-      abi: factoryAbi,
-      functionName: 'deploy_vesting_contract',
-      args: [
-        validTokenAddress as Address,
-        recipient as Address,
-        amountParsed,
-        BigInt(duration),
-        BigInt(startTime),
-        BigInt(cliff),
-        openClaim,
-        supportVyper ? VYPER_DONATION_BPS : 0n,
-        userAddress as Address,
-      ],
-    });
+    const commonArgs = [
+      validTokenAddress as Address,
+      recipient as Address,
+      amountParsed,
+      BigInt(duration),
+      BigInt(startTime),
+      BigInt(cliff),
+      openClaim,
+      donationBps,
+      userAddress as Address,
+    ] as const;
+
+    if (ACTIVE_FACTORY.version === 2) {
+      deploy({
+        address: FACTORY_ADDRESS,
+        abi: factoryAbi,
+        functionName: 'deploy_vesting_contract',
+        args: [...commonArgs, yieldToOwner],
+      });
+    } else {
+      deploy({
+        address: FACTORY_ADDRESS,
+        abi: legacyFactoryAbi,
+        functionName: 'deploy_vesting_contract',
+        args: commonArgs,
+      });
+    }
   };
 
-  // Effect: After approval success, refetch allowance and continue
-  if (approveSuccess && step === 'approve') {
-    refetchAllowance();
-    setStep('form');
-  }
+  const handledDeployHash = useRef<string>();
 
-  // Effect: After deploy success, extract created escrow address
-  if (deploySuccess && deployReceipt && step === 'deploy') {
-    // Find the VestingEscrowCreated event
-    const eventTopic = '0x99fd02dbc65944923f77d3e5d3e77e8c4c1b4026201be5445a8e827183e993e2';
-    const log = deployReceipt.logs.find((l) => l.topics[0] === eventTopic);
-    if (log && log.data) {
-      // The escrow address is in the data field (first 32 bytes, address padded)
-      const escrowAddress = '0x' + log.data.slice(26, 66);
-      setCreatedEscrow(escrowAddress);
-      setStep('success');
+  useEffect(() => {
+    if (!approveSuccess || step !== 'approve') return;
+
+    void refetchAllowance().finally(() => {
+      setStep('form');
+      resetApprove();
+    });
+  }, [approveSuccess, refetchAllowance, resetApprove, step]);
+
+  useEffect(() => {
+    if (
+      !deploySuccess ||
+      !deployReceipt ||
+      !deployHash ||
+      step !== 'deploy' ||
+      handledDeployHash.current === deployHash
+    ) {
+      return;
     }
-  }
+
+    handledDeployHash.current = deployHash;
+    const escrow = decodeCreatedEscrow({
+      logs: deployReceipt.logs,
+      factory: ACTIVE_FACTORY,
+      blockNumber: deployReceipt.blockNumber,
+      transactionHash: deployReceipt.transactionHash,
+      tokenMetadata: tokenSymbol
+        ? {
+            symbol: tokenSymbol,
+            name: tokenSymbol,
+            decimals,
+            logoUrl: null,
+          }
+        : undefined,
+    });
+
+    if (!escrow) return;
+
+    savePendingEscrow(escrow);
+    setCreatedEscrow(escrow.address);
+    setStep('success');
+    resetDeploy();
+  }, [decimals, deployHash, deployReceipt, deploySuccess, resetDeploy, step, tokenSymbol]);
 
   // Validation
   const isValidForm =
@@ -230,7 +264,10 @@ export default function Create() {
     amountParsed > 0n &&
     duration > 0 &&
     (startNow || startDate) &&
-    cliff <= duration;
+    Number.isFinite(startTime) &&
+    startTime + duration > Math.floor(Date.now() / 1000) &&
+    cliff <= duration &&
+    isCorrectChain;
 
   if (!isConnected) {
     return (
@@ -263,6 +300,11 @@ export default function Create() {
       </p>
 
       <div className="space-y-6">
+        {!isCorrectChain && (
+          <p className="rounded border border-red-600/40 p-3 text-sm text-red-600 dark:text-red-400">
+            Switch your wallet to Ethereum mainnet before creating an escrow.
+          </p>
+        )}
         {/* Token Address */}
         <div>
           <label className="block text-sm font-medium text-primary mb-2">
@@ -311,8 +353,14 @@ export default function Create() {
             placeholder="0.0"
             className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
           />
-          {!hasBalance && amountParsed > 0n && (
+          {tokenBalance !== undefined && !hasBalance && amountParsed > 0n && (
             <p className="mt-2 text-sm text-red-600 dark:text-red-400">Insufficient balance</p>
+          )}
+          {supportVyper && amountParsed > 0n && (
+            <p className="mt-2 text-sm text-secondary">
+              Total required, including the 1% donation:{' '}
+              <TokenAmount value={fundingRequired} decimals={decimals} />
+            </p>
           )}
         </div>
 
@@ -462,13 +510,32 @@ export default function Create() {
           </label>
         </div>
 
+        {ACTIVE_FACTORY.version === 2 && (
+          <div>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={yieldToOwner}
+                onChange={(event) => setYieldToOwner(event.target.checked)}
+                className="text-primary"
+              />
+              <span className="text-secondary">
+                Return vault yield to original owner
+              </span>
+            </label>
+            <p className="mt-1 pl-6 text-sm text-tertiary">
+              Use only with ERC-4626 vault shares.
+            </p>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="pt-4 border-t border-divider-subtle">
           {needsApproval ? (
             <Button
               onClick={handleApprove}
               loading={approvePending || approveConfirming}
-              disabled={!isValidForm || !hasBalance}
+              disabled={!isValidForm || !hasBalance || !tokenDataReady}
               className="w-full"
             >
               {approvePending
@@ -481,7 +548,7 @@ export default function Create() {
             <Button
               onClick={handleDeploy}
               loading={deployPending || deployConfirming}
-              disabled={!isValidForm || !hasBalance}
+              disabled={!isValidForm || !hasBalance || !tokenDataReady}
               className="w-full"
             >
               {deployPending

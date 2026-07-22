@@ -29,10 +29,6 @@ jobs:
           cache: pip
           cache-dependency-path: packages/contracts/requirements.txt
 
-      - uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: v1.5.1
-
       - name: Install contract dependencies
         run: |
           python -m venv .venv
@@ -40,10 +36,10 @@ jobs:
           .venv/bin/python -m pip install -r requirements.txt
 
       - name: Compile contracts
-        run: .venv/bin/ape compile --size
+        run: .venv/bin/python scripts/compile.py
 
       - name: Run functional tests
-        run: .venv/bin/ape test tests/functional/ --gas --coverage
+        run: .venv/bin/pytest tests/functional/ --gas-profile
 
       - name: Run property tests
-        run: .venv/bin/ape test tests/integration/ -s
+        run: .venv/bin/pytest tests/integration/

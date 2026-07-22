@@ -1,157 +1,235 @@
 # Contracts and Indexing
 
-This document captures the onchain contracts, indexer inputs, and app-side status logic used by the vesting escrow app.
+This document is the integration contract between the Vyper package, indexer,
+and frontend.
 
-## Chain and Factories
+## Deployments
 
-- Chain: Ethereum mainnet (`chainId = 1`)
-- Active factory used by the create flow:
-  - `0x200C92Dd85730872Ab6A1e7d5E40A067066257cF`
-  - Deploy block: `18,291,969`
-- Compatible Curve factory indexed by the app:
-  - `0xcf61782465Ff973638143d6492B51A85986aB347`
-  - Deploy block: `19,739,664`
+Ethereum mainnet is the only supported chain. `config/deployments.json` is the
+shared registry: the frontend writes through `activeFactory`, while the indexer
+reads every listed factory from its deployment block.
 
-The frontend uses the active factory constant in `src/lib/constants.ts`. The indexer scans both factory deployments.
+The two deployed factories are historical version 1 contracts:
 
-## VestingEscrowFactory
+| Factory | Deploy block | Role |
+| --- | ---: | --- |
+| `0x200C92Dd85730872Ab6A1e7d5E40A067066257cF` | 18,291,969 | Current create target |
+| `0xcf61782465Ff973638143d6492B51A85986aB347` | 19,739,664 | Indexed Curve-compatible factory |
 
-The factory deploys `VestingEscrowSimple` instances using minimal proxies.
+The version 2 source is unreleased. Existing escrows remain attached to their
+original immutable implementation and are never upgraded.
 
-Editable contract sources, tests, and Ape deployment tooling are vendored at
-`packages/contracts/` from the upstream v0.3.0 release. See
-`packages/contracts/UPSTREAM.md` for provenance and
-`docs/architecture/contracts-development-and-deployment.md` for the change and
-redeployment plan.
+## Current factory
 
-The local unreleased source includes the compatible Curve fork's escrow
-registry, zero default donation, revoke ordering, and dust-solvency assertion.
-The escrow ABI and `VestingEscrowCreated` event are unchanged; the factory ABI
-only adds `escrows(uint256)` and `escrows_length()` getters.
+`packages/contracts/contracts/VestingEscrowFactory.vy` has one immutable
+`TARGET`. Each deployment is atomic:
 
-### `deploy_vesting_contract`
+1. create an ERC-1167 proxy;
+2. transfer the exact escrow amount directly into it;
+3. initialize it once;
+4. transfer any optional Vyper donation;
+5. append it to the on-chain escrow registry;
+6. emit the compatible creation event and additive configuration event.
 
-| Parameter | Type | Meaning |
-| --- | --- | --- |
-| `token` | `address` | ERC20 token being vested |
-| `recipient` | `address` | Escrow beneficiary |
-| `amount` | `uint256` | Total amount locked |
-| `vesting_duration` | `uint256` | Vesting duration in seconds |
-| `vesting_start` | `uint256` | Start timestamp |
-| `cliff_length` | `uint256` | Cliff duration in seconds |
-| `open_claim` | `bool` | Whether third parties can trigger claims |
-| `support_vyper` | `uint256` | Optional donation in basis points |
-| `owner` | `address` | Address allowed to revoke/disown |
-
-### `VestingEscrowCreated`
-
-Event signature:
+The constructor is:
 
 ```text
-VestingEscrowCreated(address,address,address,address,uint256,uint256,uint256,uint256,bool)
+VestingEscrowFactory(target, vyper_donate)
 ```
 
-Topic hash:
+The creation call is:
 
 ```text
-0x99fd02dbc65944923f77d3e5d3e77e8c4c1b4026201be5445a8e827183e993e2
+deploy_vesting_contract(
+    token,
+    recipient,
+    amount,
+    vesting_duration,
+    vesting_start,
+    cliff_length,
+    open_claim,
+    support_vyper,
+    owner,
+    yield_to_owner,
+)
 ```
 
-Indexed event fields:
+`support_vyper` is expressed in basis points and cannot exceed 10,000. The
+frontend currently offers either zero or 100 basis points.
 
-- `funder`
-- `token`
-- `recipient`
+### Creation events
 
-Non-indexed event fields:
+Version 2 preserves the original creation event exactly. `funder`, `token`, and
+`recipient` are indexed, so existing event consumers keep the same topic and
+decoding schema.
 
-- `escrow`
-- `amount`
-- `vesting_start`
-- `vesting_duration`
-- `cliff_length`
-- `open_claim`
+```text
+VestingEscrowCreated(
+    funder,
+    token,
+    recipient,
+    escrow,
+    amount,
+    vesting_start,
+    vesting_duration,
+    cliff_length,
+    open_claim,
+)
+```
+
+An additive event supplies version 2 metadata without changing the historical
+event topic:
+
+```text
+VestingEscrowConfigured(
+    escrow,
+    owner,
+    asset,
+    yield_to_owner,
+    principal,
+)
+```
+
+Version 2 consumers join these logs by escrow address and transaction hash.
+Historical factories emit only `VestingEscrowCreated`.
 
 ## VestingEscrowSimple
 
-Key state surfaced by the app:
+`packages/contracts/contracts/VestingEscrowSimple.vy` is the sole current
+implementation. `version()` returns `2`. The implementation instance is locked
+in its constructor; only funded proxies can be initialized.
 
-| Field | Meaning |
-| --- | --- |
-| `recipient` | Beneficiary |
-| `token` | ERC20 token |
-| `start_time` | Vesting start timestamp |
-| `end_time` | Vesting end timestamp |
-| `cliff_length` | Cliff duration |
-| `total_locked` | Initial locked amount |
-| `total_claimed` | Claimed amount |
-| `disabled_at` | Revocation time, or `end_time` if active |
-| `open_claim` | Third-party claim toggle |
-| `owner` | Revocation authority |
+The mode flag changes accounting, not the lifecycle API:
 
-Core functions surfaced by the app:
+| `yield_to_owner` | Token meaning | Principal | Yield recipient |
+| --- | --- | --- | --- |
+| `false` | Standard ERC-20 | `amount` token units | None |
+| `true` | ERC-4626 shares | `convertToAssets(amount)` asset units | Original owner |
 
-- `unclaimed()`
-- `locked()`
-- `claim(beneficiary, amount)`
-- `set_open_claim(bool)`
-- `revoke(ts, beneficiary)`
-- `disown()`
+`yield_to_owner()` is derived from the nonzero fixed `yield_recipient`, keeping
+the mode and its payout destination in one storage value. Yield-mode
+initialization requires a contract asset and exercises both ERC-4626 conversion
+methods before the proxy can be registered. These are interface sanity checks;
+they do not replace reviewing the vault implementation.
 
-## Status Logic
+Yield mode is intended for reviewed, conventional vaults whose raw share unit
+is economically negligible. It does not attempt exact, claim-history-independent
+allocation for coarse shares. ERC-4626 floor rounding can move less than one raw
+share per claim or revoke transition between recipient principal and owner
+yield; production vault review must confirm that this bound is immaterial.
 
-`src/lib/escrow.ts` resolves status in this order:
+Amounts and initial principal are limited to `uint128`; duration is limited to
+`uint64`. Live token balances may be larger because direct ERC-20 transfers
+cannot be rejected, so balance-dependent accounting does not rely on the
+initial amount bound.
 
-1. `revoked`: `disabled_at < end_time`
-2. `completed`: `unclaimed === 0 && locked === 0`
-3. `cliff`: current time is before `start_time + cliff_length`
-4. `claimable`: `locked === 0 && unclaimed > 0`
-5. `vesting`: default active state
+The lifecycle retains the deployed overloads:
 
-When live data is unavailable, the app falls back to time-based inference from indexed fields.
+```text
+claim(beneficiary=msg.sender, amount=max) -> vested tokens or principal shares
+claim_yield()                            -> current yield shares to original owner
+revoke(ts=block.timestamp, beneficiary=msg.sender)
+                                         -> unvested tokens or vault shares
+disown()                                 -> permanently remove revoke authority
+set_open_claim()                         -> recipient controls third-party claims
+collect_dust(token, beneficiary=msg.sender)
+                                         -> tokens not reserved for vesting
+```
 
-## Indexer Layout
+Standard mode preserves the original partial-claim, beneficiary, revoke, and
+dust behavior. Yield mode supports full scheduled claims, keeps vault shares
+out of `collect_dust`, and reserves yield for the original owner. Regular
+claims transfer principal only; yield moves only through `claim_yield()` or as
+part of an owner-initiated revocation.
 
-All Python indexer assets now live under `scripts/indexer/`:
+The existing `claim(beneficiary, amount)` ABI is unchanged. In standard mode,
+`amount` caps a partial token claim. In yield mode, it is a maximum share-output
+cap for the full currently vested principal claim; a lower cap reverts without
+changing state.
 
-- `scripts/indexer/index_escrows.py`
-- `scripts/indexer/requirements.txt`
-- `scripts/indexer/setup-python.sh`
-- `scripts/indexer/abi/VestingEscrowFactory.json`
-- `scripts/indexer/abi/VestingEscrowSimple.json`
+Funding and payouts always use `token`. In yield mode that token is the vault
+wrapper; the escrow never deposits, withdraws, or redeems underlying assets.
 
-The ABI JSON files are indexer assets. The frontend uses inline ABI fragments for the contract calls it needs.
+### Share accounting
 
-The contract package's compiler artifacts under `packages/contracts/.build/`
-are generated and ignored. If a contract change affects an ABI, regenerate the
-consumer ABIs from a reviewed build instead of allowing the frontend, indexer,
-and Vyper source to drift independently.
+Let `B` be the escrow's current share balance, `V = convertToAssets(B)`, and `R`
+the remaining principal in asset units. When there is yield, the vault performs
+the asset-to-share conversion and the escrow rounds the principal reserve up by
+at most one share.
 
-## Index Outputs
+```text
+if V <= R:
+    principal_shares = B
+    yield_shares = 0
+else:
+    principal_shares = convertToShares(R)
+    if convertToAssets(principal_shares) < R:
+        principal_shares += 1
+    yield_shares = B - principal_shares
+```
 
-Generated files:
+The first branch also covers complete vault loss: every remaining share stays
+in the principal pool, no asset-to-share division is attempted, and transferable
+shares remain claimable rather than becoming stuck.
 
-- `public/data/escrows.json`
-- `public/data/tokens.json`
+For a principal transition from `R` to `R2`, the escrow keeps the rounded-up
+reserve and pays the remainder:
 
-The indexer stores:
+```text
+whole, remainder = divmod(principal_shares, R)
+reserve = whole * R2 + ceil(remainder * R2 / R)
+payout = principal_shares - reserve
+```
 
-- indexed escrow creation events
-- last indexed block per factory
-- token metadata and preferred logo URL
+Each transition rounds the remaining principal reserve up and the payout down.
+Because the asset-denominated schedule advances independently of whole-share
+transfers, repeated claims can differ from one terminal claim by raw share
+units. This accepted rounding avoids persistent checkpoint state and complex
+rate-change logic. The remainder is strictly smaller than the `uint128`
+principal, so the only explicit multiplication is bounded even when direct
+transfers make the live share balance much larger. Vault losses are borne
+proportionally by outstanding principal; gains above principal go to the
+original owner.
 
-## Runtime Data Sources
+## Frontend compatibility
 
-- Token logos: SmolDapp first, then Trust Wallet, Uniswap, and `stamp.fyi`
-- Token prices: DeFiLlama Coins API
-- Live escrow reads: on-demand RPC calls from the frontend
+The frontend uses the factory version for deployment and event decoding:
 
-## Automation
+- both versions claim through `claim(recipient, max_value(uint256))`;
+- claim calldata uses the live on-chain `recipient()`, never indexed metadata;
+- version 1 reads the historical creation event;
+- version 2 joins the compatible creation event with its configuration event;
+- yield controls are shown only when `yield_to_owner` is enabled.
 
-`.github/workflows/index-escrows.yml`:
+Confirmed creations are retained in a seven-day local cache until the public
+index catches up.
 
-- runs daily at `00:00 UTC`
-- supports manual dispatch
-- creates a Python virtualenv
-- refreshes `public/data/*.json`
-- commits updated index files back to the repo
+## Indexer
+
+Indexer assets live in `scripts/indexer/`:
+
+```text
+abi/VestingEscrowFactoryLegacy.json  historical event
+abi/VestingEscrowFactory.json        current event
+index_escrows.py                     scanner and generator
+```
+
+Each indexed record carries its factory address and explicit version. Version 2
+records join same-transaction creation and configuration events to add
+`yieldToOwner`, `asset`, `yieldRecipient`, and `principal`.
+
+`public/data/escrows.json` and `public/data/tokens.json` are generated files.
+Only `scripts/indexer/index_escrows.py` may update them.
+
+## Activation
+
+After a reviewed mainnet deployment:
+
+1. add the factory and exact deployment block to `config/deployments.json`;
+2. run and review a low-value standard-token canary;
+3. run and review a low-value ERC-4626 canary;
+4. set the new address as `activeFactory`;
+5. run the indexer and review the generated data diff.
+
+Rollback changes only `activeFactory` back to the last known-good factory.
+Already-created escrows and their historical factory stay indexed.

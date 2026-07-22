@@ -31,19 +31,7 @@ import {
   isOwner,
   isRecipient,
 } from '../lib/escrow';
-
-const escrowAbi = [
-  {
-    name: 'claim',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'beneficiary', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
+import { claimAbi, yieldClaimAbi } from '../lib/contracts';
 
 function formatDaysUntil(timestamp: number, now: number): string {
   const targetDate = new Date(timestamp * 1000);
@@ -90,7 +78,11 @@ export default function EscrowDetail() {
   };
 
   const { escrow: indexedEscrow, isLoading: loadingIndex } = useEscrowByAddress(escrowAddress);
-  const { data: liveData, isLoading: loadingLive, refetch } = useLiveEscrowData(escrowAddress);
+  const validEscrowAddress = escrowAddress && isAddress(escrowAddress) ? escrowAddress : undefined;
+  const { data: liveData, isLoading: loadingLive, refetch } = useLiveEscrowData(
+    validEscrowAddress,
+    indexedEscrow?.yieldToOwner,
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
@@ -98,7 +90,9 @@ export default function EscrowDetail() {
   const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
   const { getName, setName } = useEscrowNames();
   const { data: tokensIndex } = useTokens();
-  const tokenMetadata = tokensIndex?.tokens[indexedEscrow?.token.toLowerCase() || ''];
+  const tokenMetadata =
+    tokensIndex?.tokens[indexedEscrow?.token.toLowerCase() || ''] ??
+    indexedEscrow?.tokenMetadata;
   const tokenPrice = useTokenPrice(indexedEscrow?.token);
 
   useEffect(() => {
@@ -178,6 +172,11 @@ export default function EscrowDetail() {
 
   return (
     <div className="mx-auto w-full max-w-3xl min-w-0 space-y-8">
+      {escrow.pending && (
+        <div className="rounded border border-divider-strong bg-divider-subtle p-3 text-sm text-secondary">
+          This escrow is confirmed onchain and will appear in the public index after the next indexer run.
+        </div>
+      )}
       {/* Header */}
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
@@ -359,6 +358,23 @@ export default function EscrowDetail() {
         </div>
       )}
 
+      {escrow.yieldToOwner && liveData?.claimableYield !== undefined && liveData.claimableYield > 0n && (
+        <div className="w-full min-w-0 p-6 border border-divider-strong rounded-lg">
+          <h2 className="text-lg font-semibold text-primary mb-2">Vault Yield</h2>
+          <p className="mb-4 text-sm text-secondary">
+            Pays available yield to the original owner.
+          </p>
+          <div className="flex items-center justify-between gap-4">
+            <TokenAmount
+              value={liveData.claimableYield}
+              decimals={decimals}
+              className="text-lg font-medium text-primary"
+            />
+            <YieldClaimButton escrowAddress={escrow.address} onSuccess={() => refetch()} />
+          </div>
+        </div>
+      )}
+
       {/* Details */}
       <div className="w-full min-w-0 p-6 border border-divider-strong rounded-lg">
         <h2 className="text-lg font-semibold text-primary mb-4">Details</h2>
@@ -407,6 +423,16 @@ export default function EscrowDetail() {
                   <span className="text-xs bg-divider-subtle px-2 py-0.5 rounded">You</span>
                 )}
               </div>
+            </DetailRow>
+          )}
+          {escrow.yieldToOwner && escrow.yieldRecipient && (
+            <DetailRow label="Yield Recipient">
+              <AddressDisplay address={escrow.yieldRecipient} />
+            </DetailRow>
+          )}
+          {escrow.yieldToOwner && escrow.asset && (
+            <DetailRow label="Underlying Asset">
+              <AddressDisplay address={escrow.asset} />
             </DetailRow>
           )}
           <DetailRow label="Duration">
@@ -465,7 +491,7 @@ function ClaimableCard({
   const handleClaim = () => {
     writeContract({
       address: escrowAddress as ViemAddress,
-      abi: escrowAbi,
+      abi: claimAbi,
       functionName: 'claim',
       args: [recipient as ViemAddress, maxUint256],
     });
@@ -581,6 +607,53 @@ function ClaimableCard({
   return (
     <div className={cardClasses}>
       {renderCardContent()}
+    </div>
+  );
+}
+
+function YieldClaimButton({
+  escrowAddress,
+  onSuccess,
+}: {
+  escrowAddress: string;
+  onSuccess?: () => void;
+}) {
+  const { data: hash, isPending, writeContract, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const handledSuccessHash = useRef<string>();
+  const onSuccessRef = useRef(onSuccess);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  useEffect(() => {
+    if (!isSuccess || !hash || handledSuccessHash.current === hash) return;
+    handledSuccessHash.current = hash;
+    onSuccessRef.current?.();
+  }, [hash, isSuccess]);
+
+  return (
+    <div className="text-right">
+      <Button
+        variant="secondary"
+        loading={isPending || isConfirming}
+        onClick={() => {
+          reset();
+          writeContract({
+            address: escrowAddress as ViemAddress,
+            abi: yieldClaimAbi,
+            functionName: 'claim_yield',
+          });
+        }}
+      >
+        {isPending ? 'Confirm in wallet...' : isConfirming ? 'Claiming...' : 'Claim Yield'}
+      </Button>
+      {error && (
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+          {error.message.includes('User rejected') ? 'Transaction rejected' : 'Failed to claim yield'}
+        </p>
+      )}
     </div>
   );
 }

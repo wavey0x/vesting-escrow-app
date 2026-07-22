@@ -1,7 +1,10 @@
-// Escrow data from index
+export type EscrowVersion = 1 | 2;
+
+// Escrow data from the generated index or the short-lived local pending cache.
 export interface IndexedEscrow {
   address: string;
   factory?: string;
+  version?: EscrowVersion;
   funder: string;
   token: string;
   recipient: string;
@@ -12,6 +15,12 @@ export interface IndexedEscrow {
   openClaim: boolean;
   blockNumber: number;
   txHash: string;
+  yieldToOwner?: boolean;
+  asset?: string;
+  yieldRecipient?: string;
+  principal?: string;
+  pending?: boolean;
+  tokenMetadata?: TokenMetadata;
 }
 
 // Token metadata from index
@@ -34,6 +43,8 @@ export interface LiveEscrowData {
   startTime: bigint;
   cliffLength: bigint;
   openClaim: boolean;
+  recipient: string;
+  claimableYield?: bigint;
 }
 
 // Combined escrow data
@@ -62,6 +73,7 @@ export interface TokenPrice {
 export interface FactoryMeta {
   deployBlock: number;
   lastBlock: number;
+  version?: EscrowVersion;
 }
 
 // Index files schema
@@ -75,12 +87,4 @@ export interface EscrowsIndex {
 export interface TokensIndex {
   lastUpdated: string;
   tokens: Record<string, TokenMetadata>;
-}
-
-// Recently viewed item
-export interface RecentlyViewedItem {
-  address: string;
-  visitedAt: number;
-  token: string;
-  recipient: string;
 }

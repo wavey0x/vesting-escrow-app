@@ -4,86 +4,14 @@ import { readContracts } from '@wagmi/core';
 import { Address } from 'viem';
 import { LiveEscrowData } from '../lib/types';
 import { config } from '../lib/wagmi';
+import { escrowReadAbi } from '../lib/contracts';
 
 // Max escrows per batch for multicall
 // readContracts uses Multicall3 contract automatically (1 RPC call per batch)
-// 15 escrows × 10 functions = 150 calls per multicall - balanced for response size limits
+// 15 escrows × 11 functions = 165 calls per multicall - balanced for response size limits
 const MAX_ESCROWS_PER_BATCH = 15;
 
-const escrowAbi = [
-  {
-    name: 'unclaimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'locked',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'total_claimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'total_locked',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'owner',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    name: 'disabled_at',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'end_time',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'start_time',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'cliff_length',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'open_claim',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bool' }],
-  },
-] as const;
-
-const FUNCTIONS_PER_ESCROW = 10;
+const FUNCTIONS_PER_ESCROW = 11;
 
 // Split array into chunks
 function chunk<T>(arr: T[], size: number): T[][] {
@@ -97,16 +25,17 @@ function chunk<T>(arr: T[], size: number): T[][] {
 // Build contracts array for a batch of addresses
 function buildContracts(addresses: string[]) {
   return addresses.flatMap((escrowAddress) => [
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'unclaimed' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'locked' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'total_claimed' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'total_locked' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'owner' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'disabled_at' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'end_time' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'start_time' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'cliff_length' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'open_claim' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'unclaimed' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'locked' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'total_claimed' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'total_locked' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'owner' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'disabled_at' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'end_time' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'start_time' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'cliff_length' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'open_claim' as const },
+    { address: escrowAddress as Address, abi: escrowReadAbi, functionName: 'recipient' as const },
   ]);
 }
 
@@ -133,6 +62,7 @@ function parseBatchResults(
         startTime: escrowData[7].result as bigint,
         cliffLength: escrowData[8].result as bigint,
         openClaim: escrowData[9].result as boolean,
+        recipient: escrowData[10].result as string,
       };
     }
   });
@@ -153,7 +83,8 @@ export function useBatchLiveEscrowData(escrowAddresses: string[]) {
       queryKey: ['batchLiveEscrowData', batchIndex, batchAddresses],
       queryFn: async () => {
         const contracts = buildContracts(batchAddresses);
-        const data = await readContracts(config as any, { contracts });
+        const wagmiConfig = config as unknown as Parameters<typeof readContracts>[0];
+        const data = await readContracts(wagmiConfig, { contracts });
         return { addresses: batchAddresses, data };
       },
       enabled: batchAddresses.length > 0,

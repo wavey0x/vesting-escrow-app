@@ -1,22 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { Address, zeroAddress } from 'viem';
+import { Address } from 'viem';
 import Button from './Button';
 import { formatTokenAmount } from '../lib/format';
 import { getEtherscanTxUrl } from '../lib/constants';
-
-const escrowAbi = [
-  {
-    name: 'revoke',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'beneficiary', type: 'address' },
-      { name: 'ts', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-] as const;
+import { revokeAbi } from '../lib/contracts';
 
 interface RevokeButtonProps {
   escrowAddress: string;
@@ -39,22 +27,28 @@ export default function RevokeButton({
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
   });
+  const handledSuccessHash = useRef<string>();
+  const onSuccessRef = useRef(onSuccess);
 
   const handleRevoke = () => {
-    // Revoke immediately (ts = 0) and send to self (beneficiary = zero to use msg.sender)
+    // Use Vyper's zero-argument overload so both defaults resolve onchain.
     writeContract({
       address: escrowAddress as Address,
-      abi: escrowAbi,
+      abi: revokeAbi,
       functionName: 'revoke',
-      args: [zeroAddress, 0n],
     });
     setShowConfirm(false);
   };
 
-  // Call onSuccess when transaction is confirmed
-  if (isSuccess && onSuccess) {
-    onSuccess();
-  }
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  useEffect(() => {
+    if (!isSuccess || !hash || handledSuccessHash.current === hash) return;
+    handledSuccessHash.current = hash;
+    onSuccessRef.current?.();
+  }, [hash, isSuccess]);
 
   if (isSuccess && hash) {
     return (

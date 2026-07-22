@@ -1,10 +1,11 @@
 import { getAddress } from 'viem';
+import { ACTIVE_FACTORY } from './contracts';
 
 // Chain configuration
 export const CHAIN_ID = 1;
 
 // Contract addresses
-export const FACTORY_ADDRESS = '0x200C92Dd85730872Ab6A1e7d5E40A067066257cF' as const;
+export const FACTORY_ADDRESS = ACTIVE_FACTORY.address;
 
 // Data endpoints
 export const ESCROWS_DATA_URL = '/data/escrows.json';
@@ -12,10 +13,6 @@ export const TOKENS_DATA_URL = '/data/tokens.json';
 
 // Token logo CDN
 export const TOKEN_LOGO_CDN = 'https://assets.smold.app/api/token';
-
-export function getTokenLogoUrl(tokenAddress: string, size: 32 | 128 = 32): string {
-  return `${TOKEN_LOGO_CDN}/${CHAIN_ID}/${tokenAddress.toLowerCase()}/logo-${size}.png`;
-}
 
 // Fallback logo sources for when cached URL fails
 export function getTokenLogoUrls(tokenAddress: string, size: 32 | 128 = 32): string[] {
@@ -44,9 +41,6 @@ export function getPriceApiUrl(tokenAddresses: string[]): string {
 
 // Price cache duration (1 hour)
 export const PRICE_CACHE_DURATION = 3600 * 1000;
-
-// Recently viewed limit
-export const RECENTLY_VIEWED_LIMIT = 20;
 
 // Etherscan
 export const ETHERSCAN_URL = 'https://etherscan.io';

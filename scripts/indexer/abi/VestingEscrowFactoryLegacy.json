@@ -14,17 +14,5 @@
     ],
     "anonymous": false,
     "type": "event"
-  },
-  {
-    "name": "VestingEscrowConfigured",
-    "inputs": [
-      {"name": "escrow", "type": "address", "indexed": true},
-      {"name": "owner", "type": "address", "indexed": true},
-      {"name": "asset", "type": "address", "indexed": true},
-      {"name": "yield_to_owner", "type": "bool", "indexed": false},
-      {"name": "principal", "type": "uint256", "indexed": false}
-    ],
-    "anonymous": false,
-    "type": "event"
   }
 ]
