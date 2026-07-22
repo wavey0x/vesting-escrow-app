@@ -112,6 +112,12 @@ initialization requires a contract asset and exercises both ERC-4626 conversion
 methods before the proxy can be registered. These are interface sanity checks;
 they do not replace reviewing the vault implementation.
 
+Yield mode is intended for reviewed, conventional vaults whose raw share unit
+is economically negligible. It does not attempt exact, claim-history-independent
+allocation for coarse shares. ERC-4626 floor rounding can move less than one raw
+share per claim or revoke transition between recipient principal and owner
+yield; production vault review must confirm that this bound is immaterial.
+
 Amounts and initial principal are limited to `uint128`; duration is limited to
 `uint64`. Live token balances may be larger because direct ERC-20 transfers
 cannot be rejected, so balance-dependent accounting does not rely on the
@@ -175,12 +181,15 @@ reserve = whole * R2 + ceil(remainder * R2 / R)
 payout = principal_shares - reserve
 ```
 
-This makes repeated claims equivalent to one claim up to unavoidable share
-rounding and keeps rounding inside the principal reserve. The remainder is
-strictly smaller than the `uint128` principal, so the only explicit
-multiplication is bounded even when direct transfers make the live share
-balance much larger. Vault losses are borne proportionally by outstanding
-principal; gains above principal go to the original owner.
+Each transition rounds the remaining principal reserve up and the payout down.
+Because the asset-denominated schedule advances independently of whole-share
+transfers, repeated claims can differ from one terminal claim by raw share
+units. This accepted rounding avoids persistent checkpoint state and complex
+rate-change logic. The remainder is strictly smaller than the `uint128`
+principal, so the only explicit multiplication is bounded even when direct
+transfers make the live share balance much larger. Vault losses are borne
+proportionally by outstanding principal; gains above principal go to the
+original owner.
 
 ## Frontend compatibility
 

@@ -16,6 +16,13 @@ for the rollout gates.
 All contracts compile with Vyper 0.4.3 for Prague. The current factory and
 implementation report `version() == 2`; they have not been deployed or audited.
 
+Yield mode targets reviewed Yearn-style vaults with conventional share
+precision. Each lifecycle transition can differ by less than one raw share due
+to ERC-4626 floor rounding; the contract deliberately accepts that negligible
+bound instead of maintaining cross-call rounding checkpoints. Coarse shares,
+fee-on-transfer behavior, pauses, blacklists, rebasing, and incompatible vault
+upgrades are outside the supported deployment policy.
+
 ## Development
 
 From the repository root:

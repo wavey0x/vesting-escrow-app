@@ -92,6 +92,34 @@ def test_one_share_round_up_is_the_minimum_principal_reserve(assets, assets_per_
     assert principal_shares == 0 or (principal_shares - 1) * assets_per_share // SCALE < assets
 
 
+def test_monthly_claim_rounding_is_bounded_for_expected_vault_precision():
+    def settle(share_unit, claims):
+        initial_shares = 1_000_000 * share_unit
+        initial_principal = initial_shares
+        balance = initial_shares
+        remaining = initial_principal
+        recipient = 0
+
+        for index in range(1, claims + 1):
+            remaining_after = initial_principal - initial_principal * index // claims
+            value = balance * 3 // 2
+            principal_shares, _ = split(balance, value, remaining)
+            claimed = payout(principal_shares, remaining, remaining_after)
+            balance -= claimed
+            recipient += claimed
+            remaining = remaining_after
+
+        return initial_shares, recipient, balance
+
+    for share_unit in (10**6, 10**18):
+        total, one_shot_recipient, one_shot_yield = settle(share_unit, 1)
+        _, monthly_recipient, monthly_yield = settle(share_unit, 12)
+
+        assert monthly_recipient + monthly_yield == total
+        assert one_shot_recipient + one_shot_yield == total
+        assert 0 <= one_shot_recipient - monthly_recipient < 12
+
+
 @settings(deadline=None, max_examples=500)
 @given(
     principal=st.integers(min_value=1, max_value=10**36),

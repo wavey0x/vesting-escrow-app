@@ -30,8 +30,9 @@ required before mainnet release.
    selection retains the deployed behavior.
 4. Standard mode never calls ERC-4626 methods.
 5. Yield mode transfers shares only; it never deposits or redeems assets.
-6. Yield-mode rounding stays in the outstanding principal reserve, including
-   when direct transfers make the live share balance larger than the initial amount.
+6. Yield mode rounds each remaining-principal reserve up, accepts sub-share
+   differences across lifecycle transitions, and treats every share as
+   principal whenever the vault value is at or below remaining principal.
 7. State changes precede callback-capable token transfers.
 8. Existing factories and escrows are never modified or migrated.
 
@@ -64,9 +65,12 @@ Before freezing a release, review:
 Any change to asset flow, authorization, accounting, initialization, or proxy
 behavior requires independent security review.
 
-Vault mode supports standards-compliant ERC-20/ERC-4626 share tokens. Paused,
-restricted, fee-on-transfer, rebasing, or otherwise nonconforming tokens are
-outside that compatibility boundary.
+Vault mode supports reviewed, standards-compliant ERC-20/ERC-4626 share tokens
+whose raw share precision makes per-transition rounding immaterial. Paused,
+restricted, fee-on-transfer, rebasing, coarse-share, or otherwise nonconforming
+tokens are outside that compatibility boundary. This is an operational review
+requirement, not a generic property that can be inferred from the ERC-4626
+interface during initialization.
 
 ## Deployment tooling
 
