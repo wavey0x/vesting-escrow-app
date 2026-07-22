@@ -178,6 +178,71 @@ def test_loss_is_shared_proportionally(
     assert vault.balanceOf(yield_vesting) == 0
 
 
+def test_total_loss_does_not_brick_principal_claims(
+    chain,
+    yield_vesting,
+    recipient,
+    owner,
+    vault,
+    amount,
+    start_time,
+    end_time,
+):
+    vault.set_assets_per_share(0, sender=owner)
+    midpoint = start_time + (end_time - start_time) // 2
+    chain.pending_timestamp = midpoint
+    vested = amount * (midpoint - start_time) // (end_time - start_time)
+
+    assert yield_vesting.claimable_yield() == 0
+    assert yield_vesting.unclaimed() == vested
+    assert yield_vesting.claim(sender=recipient) == vested
+    assert vault.balanceOf(recipient) == vested
+
+    chain.pending_timestamp = end_time
+    assert yield_vesting.claim(sender=recipient) == amount - vested
+    assert yield_vesting.claim_yield(sender=recipient) == 0
+    assert vault.balanceOf(recipient) == amount
+    assert vault.balanceOf(yield_vesting) == 0
+
+
+def test_loss_then_recovery_only_exposes_surplus_as_yield(
+    chain,
+    yield_vesting,
+    recipient,
+    owner,
+    vault,
+    amount,
+    start_time,
+    end_time,
+):
+    vault.set_assets_per_share(8 * SCALE // 10, sender=owner)
+    midpoint = start_time + (end_time - start_time) // 2
+    chain.pending_timestamp = midpoint
+    vested = amount * (midpoint - start_time) // (end_time - start_time)
+
+    assert yield_vesting.claim(sender=recipient) == vested
+    remaining_principal = amount - vested
+
+    vault.set_assets_per_share(12 * SCALE // 10, sender=owner)
+    balance = vault.balanceOf(yield_vesting)
+    principal_pool, expected_yield = split(
+        balance,
+        vault.convertToAssets(balance),
+        remaining_principal,
+    )
+
+    assert yield_vesting.claimable_yield() == expected_yield
+    assert yield_vesting.claim_yield(sender=recipient) == expected_yield
+    assert vault.balanceOf(owner) == expected_yield
+    assert vault.balanceOf(yield_vesting) == principal_pool
+    assert vault.convertToAssets(principal_pool) >= remaining_principal
+
+    chain.pending_timestamp = end_time
+    yield_vesting.claim(sender=recipient)
+    assert vault.balanceOf(yield_vesting) == 0
+    assert vault.balanceOf(recipient) + vault.balanceOf(owner) == amount
+
+
 def test_donated_shares_are_yield(
     yield_vesting,
     owner,
@@ -216,6 +281,7 @@ def test_revoke_combines_clawback_and_yield_for_owner(
     assert vault.balanceOf(owner) == yield_shares + clawback
     assert vault.convertToAssets(vault.balanceOf(yield_vesting)) >= recipient_principal
     assert yield_vesting.owner() == ZERO_ADDRESS
+    assert yield_vesting.yield_to_owner()
 
     yield_vesting.claim(sender=recipient)
     assert vault.balanceOf(yield_vesting) == 0
@@ -240,6 +306,7 @@ def test_revoke_shares_loss(
 
     yield_vesting.revoke(sender=owner)
     assert vault.balanceOf(owner) == expected_owner
+    assert yield_vesting.yield_to_owner()
 
     yield_vesting.claim(sender=recipient)
     assert vault.balanceOf(recipient) == amount - expected_owner
@@ -260,6 +327,7 @@ def test_disown_does_not_change_yield_recipient(
 
     assert yield_vesting.owner() == ZERO_ADDRESS
     assert yield_vesting.yield_recipient() == owner
+    assert yield_vesting.yield_to_owner()
     assert vault.balanceOf(owner) == amount * (125 - 100) // 125
 
 

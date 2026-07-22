@@ -60,7 +60,6 @@ def convertToShares(assets: uint256) -> uint256:
 
 @external
 def set_assets_per_share(assets_per_share: uint256):
-    assert assets_per_share > 0
     self.assets_per_share = assets_per_share
 
 

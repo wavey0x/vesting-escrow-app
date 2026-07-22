@@ -43,7 +43,7 @@ def payout_cases(draw):
     principal=st.integers(min_value=1, max_value=2**128 - 1),
     balance=st.integers(min_value=1, max_value=UINT256_MAX),
     claim_bps=st.integers(min_value=0, max_value=10_000),
-    value=st.integers(min_value=1, max_value=UINT256_MAX),
+    value=st.integers(min_value=0, max_value=UINT256_MAX),
 )
 def test_split_conserves_shares_and_rounds_toward_principal(
     principal,
@@ -97,7 +97,7 @@ def test_one_share_round_up_is_the_minimum_principal_reserve(assets, assets_per_
     principal=st.integers(min_value=1, max_value=10**36),
     actions=st.lists(
         st.tuples(
-            st.integers(min_value=SCALE // 4, max_value=4 * SCALE),
+            st.integers(min_value=0, max_value=4 * SCALE),
             st.integers(min_value=0, max_value=10_000),
             st.integers(min_value=0, max_value=10**24),
         ),

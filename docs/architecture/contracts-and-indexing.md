@@ -106,6 +106,12 @@ The mode flag changes accounting, not the lifecycle API:
 | `false` | Standard ERC-20 | `amount` token units | None |
 | `true` | ERC-4626 shares | `convertToAssets(amount)` asset units | Original owner |
 
+`yield_to_owner()` is derived from the nonzero fixed `yield_recipient`, keeping
+the mode and its payout destination in one storage value. Yield-mode
+initialization requires a contract asset and exercises both ERC-4626 conversion
+methods before the proxy can be registered. These are interface sanity checks;
+they do not replace reviewing the vault implementation.
+
 Amounts and initial principal are limited to `uint128`; duration is limited to
 `uint64`. Live token balances may be larger because direct ERC-20 transfers
 cannot be rejected, so balance-dependent accounting does not rely on the
@@ -155,6 +161,10 @@ else:
         principal_shares += 1
     yield_shares = B - principal_shares
 ```
+
+The first branch also covers complete vault loss: every remaining share stays
+in the principal pool, no asset-to-share division is attempted, and transferable
+shares remain claimable rather than becoming stuck.
 
 For a principal transition from `R` to `R2`, the escrow keeps the rounded-up
 reserve and pays the remainder:

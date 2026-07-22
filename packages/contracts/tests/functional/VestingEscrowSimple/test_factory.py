@@ -199,6 +199,34 @@ def test_donation(
     assert token.balanceOf(vyper_donation) == donation
 
 
+def test_donation_is_safe_at_amount_and_rate_limits(
+    vesting_factory,
+    vyper_donation,
+    owner,
+    recipient,
+    token,
+    duration,
+    start_time,
+):
+    amount = 2**128 - 1
+    token.mint(owner, amount * 2, sender=owner)
+    token.approve(vesting_factory, amount * 2, sender=owner)
+
+    deploy_escrow(
+        vesting_factory,
+        token,
+        owner,
+        recipient,
+        owner,
+        amount,
+        duration,
+        start_time,
+        support_vyper=10_000,
+    )
+
+    assert token.balanceOf(vyper_donation) == amount
+
+
 def test_zero_donation_recipient_is_allowed_when_support_is_zero(
     vesting_target,
     owner,
@@ -426,6 +454,9 @@ def test_plain_token_cannot_enable_yield(
 ):
     token.mint(owner, amount, sender=owner)
     token.approve(vesting_factory, amount, sender=owner)
+    balance_before = token.balanceOf(owner)
+    allowance_before = token.allowance(owner, vesting_factory)
+    escrows_before = vesting_factory.escrows_length()
 
     with boa.reverts():
         deploy_escrow(
@@ -439,6 +470,80 @@ def test_plain_token_cannot_enable_yield(
             start_time,
             yield_to_owner=True,
         )
+
+    assert token.balanceOf(owner) == balance_before
+    assert token.allowance(owner, vesting_factory) == allowance_before
+    assert vesting_factory.escrows_length() == escrows_before
+    assert events(vesting_factory, "VestingEscrowCreated", include_child_logs=False) == []
+
+
+def test_partial_vault_cannot_enable_yield(
+    vesting_factory,
+    owner,
+    recipient,
+    asset_token,
+    amount,
+    duration,
+    start_time,
+):
+    vault = deploy("test/PartialERC4626", asset_token, sender=owner)
+    vault.mint(owner, amount, sender=owner)
+    vault.approve(vesting_factory, amount, sender=owner)
+    balance_before = vault.balanceOf(owner)
+    allowance_before = vault.allowance(owner, vesting_factory)
+    escrows_before = vesting_factory.escrows_length()
+
+    with boa.reverts():
+        deploy_escrow(
+            vesting_factory,
+            vault,
+            owner,
+            recipient,
+            owner,
+            amount,
+            duration,
+            start_time,
+            yield_to_owner=True,
+        )
+
+    assert vault.balanceOf(owner) == balance_before
+    assert vault.allowance(owner, vesting_factory) == allowance_before
+    assert vesting_factory.escrows_length() == escrows_before
+    assert events(vesting_factory, "VestingEscrowCreated", include_child_logs=False) == []
+
+
+def test_yield_mode_requires_contract_asset(
+    vesting_factory,
+    owner,
+    recipient,
+    amount,
+    duration,
+    start_time,
+):
+    vault = deploy("test/MockERC4626", owner, sender=owner)
+    vault.mint(owner, amount, sender=owner)
+    vault.approve(vesting_factory, amount, sender=owner)
+    balance_before = vault.balanceOf(owner)
+    allowance_before = vault.allowance(owner, vesting_factory)
+    escrows_before = vesting_factory.escrows_length()
+
+    with boa.reverts():
+        deploy_escrow(
+            vesting_factory,
+            vault,
+            owner,
+            recipient,
+            owner,
+            amount,
+            duration,
+            start_time,
+            yield_to_owner=True,
+        )
+
+    assert vault.balanceOf(owner) == balance_before
+    assert vault.allowance(owner, vesting_factory) == allowance_before
+    assert vesting_factory.escrows_length() == escrows_before
+    assert events(vesting_factory, "VestingEscrowCreated", include_child_logs=False) == []
 
 
 def test_fee_charging_share_token_is_rejected(

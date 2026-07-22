@@ -520,9 +520,12 @@ export default function Create() {
                 className="text-primary"
               />
               <span className="text-secondary">
-                Treat this token as ERC-4626 vault shares and return generated yield to the owner
+                Return vault yield to original owner
               </span>
             </label>
+            <p className="mt-1 pl-6 text-sm text-tertiary">
+              Use only with ERC-4626 vault shares.
+            </p>
           </div>
         )}
 

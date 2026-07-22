@@ -78,7 +78,6 @@ export default function EscrowDetail() {
   };
 
   const { escrow: indexedEscrow, isLoading: loadingIndex } = useEscrowByAddress(escrowAddress);
-  const version = indexedEscrow?.version ?? 1;
   const validEscrowAddress = escrowAddress && isAddress(escrowAddress) ? escrowAddress : undefined;
   const { data: liveData, isLoading: loadingLive, refetch } = useLiveEscrowData(
     validEscrowAddress,
@@ -363,7 +362,7 @@ export default function EscrowDetail() {
         <div className="w-full min-w-0 p-6 border border-divider-strong rounded-lg">
           <h2 className="text-lg font-semibold text-primary mb-2">Vault Yield</h2>
           <p className="mb-4 text-sm text-secondary">
-            Anyone may send the available vault shares to the fixed yield recipient.
+            Pays available yield to the original owner.
           </p>
           <div className="flex items-center justify-between gap-4">
             <TokenAmount
@@ -383,7 +382,6 @@ export default function EscrowDetail() {
           <DetailRow label="Escrow Address">
             <AddressDisplay address={escrow.address} />
           </DetailRow>
-          <DetailRow label="Version">{version}</DetailRow>
           <DetailRow label="Token">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1.5 rounded bg-divider-subtle px-2 py-1">

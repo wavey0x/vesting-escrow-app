@@ -115,10 +115,7 @@ def deploy_vesting_contract(
 
     if support_vyper > 0:
         assert VYPER != empty(address)  # dev: invalid donation recipient
-        donation: uint256 = (
-            amount // BPS * support_vyper
-            + (amount % BPS) * support_vyper // BPS
-        )
+        donation: uint256 = amount * support_vyper // BPS
         if donation > 0:
             assert extcall token.transferFrom(
                 msg.sender,

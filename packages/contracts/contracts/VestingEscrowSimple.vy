@@ -61,7 +61,6 @@ open_claim: public(bool)
 initialized: public(bool)
 owner: public(address)
 yield_recipient: public(address)
-yield_to_owner: public(bool)
 
 
 @deploy
@@ -74,6 +73,18 @@ def __init__():
 @pure
 def version() -> uint256:
     return 2
+
+
+@internal
+@view
+def _yield_enabled() -> bool:
+    return self.yield_recipient != empty(address)
+
+
+@external
+@view
+def yield_to_owner() -> bool:
+    return self._yield_enabled()
 
 
 @external
@@ -118,10 +129,12 @@ def initialize(
     yield_recipient: address = empty(address)
     if yield_to_owner:
         asset: address = staticcall token.asset()
-        assert asset != empty(address)  # dev: invalid asset
+        assert asset.is_contract  # dev: invalid asset
         principal = staticcall token.convertToAssets(amount)
         assert principal > 0  # dev: zero principal
         assert principal <= MAX_AMOUNT  # dev: principal too large
+        # Fail atomically if a partial vault lacks a conversion used by later claims.
+        conversion_probe: uint256 = staticcall token.convertToShares(principal)
         yield_recipient = owner
 
     self.owner = owner
@@ -135,7 +148,6 @@ def initialize(
     self.disabled_at = end_time
     self.open_claim = open_claim
     self.yield_recipient = yield_recipient
-    self.yield_to_owner = yield_to_owner
 
     return True
 
@@ -216,7 +228,7 @@ def _unclaimed_shares(time: uint256) -> uint256:
 @external
 @view
 def asset() -> address:
-    if self.yield_to_owner:
+    if self._yield_enabled():
         return staticcall self.token.asset()
     return self.token.address
 
@@ -237,7 +249,7 @@ def claimable_principal() -> uint256:
 @view
 def unclaimed() -> uint256:
     time: uint256 = min(block.timestamp, self.disabled_at)
-    if not self.yield_to_owner:
+    if not self._yield_enabled():
         return self._total_vested_at(time) - self.total_claimed
     return self._unclaimed_shares(time)
 
@@ -246,7 +258,7 @@ def unclaimed() -> uint256:
 @view
 def locked() -> uint256:
     time: uint256 = min(block.timestamp, self.disabled_at)
-    if not self.yield_to_owner:
+    if not self._yield_enabled():
         return self._total_vested_at(self.disabled_at) - self._total_vested_at(time)
 
     remaining: uint256 = self._remaining_principal()
@@ -262,7 +274,7 @@ def locked() -> uint256:
 @external
 @view
 def claimable_yield() -> uint256:
-    if not self.yield_to_owner:
+    if not self._yield_enabled():
         return 0
     ignored_principal: uint256 = 0
     yield_shares: uint256 = 0
@@ -287,7 +299,7 @@ def claim(
     assert msg.sender == recipient or self.open_claim and beneficiary == recipient  # dev: not authorized
 
     claim_period_end: uint256 = min(block.timestamp, self.disabled_at)
-    if not self.yield_to_owner:
+    if not self._yield_enabled():
         claimable: uint256 = min(self._total_vested_at(claim_period_end) - self.total_claimed, amount)
         self.total_claimed += claimable
         self.principal_claimed += claimable
@@ -319,7 +331,8 @@ def claim(
 @nonreentrant
 def claim_yield() -> uint256:
     """Send current yield to the fixed original owner."""
-    assert self.initialized and self.yield_to_owner  # dev: yield disabled
+    yield_recipient: address = self.yield_recipient
+    assert self.initialized and yield_recipient != empty(address)  # dev: yield disabled
 
     remaining: uint256 = self._remaining_principal()
     ignored_principal: uint256 = 0
@@ -327,8 +340,8 @@ def claim_yield() -> uint256:
     ignored_principal, yield_shares = self._split_yield(remaining)
 
     if yield_shares > 0:
-        assert extcall self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
-        log YieldClaim(recipient=self.yield_recipient, claimed=yield_shares)
+        assert extcall self.token.transfer(yield_recipient, yield_shares, default_return_value=True)
+        log YieldClaim(recipient=yield_recipient, claimed=yield_shares)
     return yield_shares
 
 
@@ -343,7 +356,8 @@ def revoke(
     assert msg.sender == owner  # dev: not owner
     assert ts >= block.timestamp and ts < self.end_time  # dev: no back to the future
 
-    if not self.yield_to_owner:
+    yield_recipient: address = self.yield_recipient
+    if yield_recipient == empty(address):
         ruggable: uint256 = self._total_vested_at(self.disabled_at) - self._total_vested_at(ts)
         self.disabled_at = ts
         self.owner = empty(address)
@@ -366,8 +380,8 @@ def revoke(
     if clawback_shares > 0:
         assert extcall self.token.transfer(beneficiary, clawback_shares, default_return_value=True)
     if yield_shares > 0:
-        assert extcall self.token.transfer(self.yield_recipient, yield_shares, default_return_value=True)
-        log YieldClaim(recipient=self.yield_recipient, claimed=yield_shares)
+        assert extcall self.token.transfer(yield_recipient, yield_shares, default_return_value=True)
+        log YieldClaim(recipient=yield_recipient, claimed=yield_shares)
 
     log Disowned(owner=owner)
     log Revoked(recipient=self.recipient, owner=owner, rugged=clawback_shares, ts=ts)
@@ -399,19 +413,20 @@ def collect_dust(
     recipient: address = self.recipient
     assert msg.sender == recipient or self.open_claim and beneficiary == recipient  # dev: not authorized
 
+    yield_enabled: bool = self._yield_enabled()
     protected_balance: uint256 = 0
-    if self.yield_to_owner:
+    if yield_enabled:
         protected_balance = staticcall self.token.balanceOf(self)
     amount: uint256 = staticcall token.balanceOf(self)
     if token.address == self.token.address:
-        assert not self.yield_to_owner  # dev: use claim_yield
+        assert not yield_enabled  # dev: use claim_yield
         required: uint256 = self._total_vested_at(self.disabled_at) - self.total_claimed
         assert amount >= required  # dev: insolvent
         amount -= required
 
     assert extcall token.transfer(beneficiary, amount, default_return_value=True)
     balance_after: uint256 = staticcall self.token.balanceOf(self)
-    if self.yield_to_owner:
+    if yield_enabled:
         assert balance_after >= protected_balance
     else:
         required_balance: uint256 = self._total_vested_at(self.disabled_at) - self.total_claimed
