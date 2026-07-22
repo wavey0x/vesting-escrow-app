@@ -17,8 +17,8 @@ The public lifecycle preserves the deployed version 1 ABI. ERC-4626 accounting,
 metadata, and the final factory argument are additive; only valuation and the
 principal/yield split are conditional.
 
-Local validation covers compilation, 62 Titanoboa functional tests, five
-integration/property tests, frontend receipt decoding, and indexer event decoding.
+Local validation covers compilation, the complete Titanoboa functional suite,
+five integration/property tests, frontend receipt decoding, and indexer event decoding.
 Independent security review and a production deployment manifest are still
 required before mainnet release.
 
@@ -46,6 +46,11 @@ From `packages/contracts/` run:
 MAINNET_RPC=https://... MAINNET_BLOCK=... .venv/bin/python scripts/fork_smoke.py
 ```
 
+The fork smoke uses a real sUSDS deployment at a pinned block and covers
+funding, principal-only claims, explicit yield claims, reserve solvency, and
+revocation. The deterministic mock suite remains responsible for losses,
+transfer fees, callbacks, donations, and rounding edge cases.
+
 Before freezing a release, review:
 
 - the automated legacy ABI subset check, selectors, topics, storage layout,
@@ -58,6 +63,10 @@ Before freezing a release, review:
 
 Any change to asset flow, authorization, accounting, initialization, or proxy
 behavior requires independent security review.
+
+Vault mode supports standards-compliant ERC-20/ERC-4626 share tokens. Paused,
+restricted, fee-on-transfer, rebasing, or otherwise nonconforming tokens are
+outside that compatibility boundary.
 
 ## Deployment tooling
 

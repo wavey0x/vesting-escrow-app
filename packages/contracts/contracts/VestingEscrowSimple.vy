@@ -276,7 +276,12 @@ def claim(
     beneficiary: address = msg.sender,
     amount: uint256 = max_value(uint256),
 ) -> uint256:
-    """Claim vested tokens or principal shares."""
+    """
+    @notice Claim vested tokens or principal shares
+    @param beneficiary Address receiving the claim
+    @param amount Maximum tokens to claim in standard mode, or maximum shares
+        accepted for the full currently vested principal claim in yield mode
+    """
     assert self.initialized  # dev: not initialized
     recipient: address = self.recipient
     assert msg.sender == recipient or self.open_claim and beneficiary == recipient  # dev: not authorized
@@ -298,7 +303,7 @@ def claim(
     ignored_yield: uint256 = 0
     principal_shares, ignored_yield = self._split_yield(remaining)
     claim_shares: uint256 = self._payout_shares(principal_shares, remaining, remaining - claimable)
-    assert amount >= claim_shares  # dev: partial share claim
+    assert amount >= claim_shares  # dev: share cap too low
 
     self.principal_claimed += claimable
     self.total_claimed += claim_shares

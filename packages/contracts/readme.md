@@ -29,6 +29,10 @@ cd packages/contracts
 MAINNET_RPC=https://... MAINNET_BLOCK=... .venv/bin/python scripts/fork_smoke.py
 ```
 
+The fork smoke defaults to sUSDS and a funded holder at block `25,587,000`.
+Override `ERC4626_VAULT`, `ERC4626_HOLDER`, and `ERC4626_AMOUNT` together to
+exercise another standards-compliant vault at a matching pinned block.
+
 After changing `requirements.in`, regenerate the lock with:
 
 ```sh

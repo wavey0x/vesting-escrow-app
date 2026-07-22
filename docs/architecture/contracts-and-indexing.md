@@ -130,6 +130,11 @@ out of `collect_dust`, and reserves yield for the original owner. Regular
 claims transfer principal only; yield moves only through `claim_yield()` or as
 part of an owner-initiated revocation.
 
+The existing `claim(beneficiary, amount)` ABI is unchanged. In standard mode,
+`amount` caps a partial token claim. In yield mode, it is a maximum share-output
+cap for the full currently vested principal claim; a lower cap reverts without
+changing state.
+
 Funding and payouts always use `token`. In yield mode that token is the vault
 wrapper; the escrow never deposits, withdraws, or redeems underlying assets.
 

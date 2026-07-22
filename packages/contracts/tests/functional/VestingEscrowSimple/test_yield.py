@@ -71,18 +71,27 @@ def test_claim_accepts_recipient_selected_beneficiary(
     assert vault.balanceOf(cold_storage) == claimed
 
 
-def test_partial_share_cap_is_rejected(
+def test_share_cap_is_all_or_nothing(
     chain,
     yield_vesting,
     recipient,
+    vault,
     start_time,
     end_time,
 ):
     chain.pending_timestamp = start_time + (end_time - start_time) // 2
     claimable = yield_vesting.unclaimed()
+    principal_claimed = yield_vesting.principal_claimed()
+    total_claimed = yield_vesting.total_claimed()
+    escrow_balance = vault.balanceOf(yield_vesting)
 
-    with boa.reverts(dev="partial share claim"):
+    with boa.reverts(dev="share cap too low"):
         yield_vesting.claim(recipient, claimable - 1, sender=recipient)
+
+    assert yield_vesting.principal_claimed() == principal_claimed
+    assert yield_vesting.total_claimed() == total_claimed
+    assert vault.balanceOf(yield_vesting) == escrow_balance
+    assert yield_vesting.claim(recipient, claimable, sender=recipient) == claimable
 
 
 def test_regular_claim_preserves_yield_until_explicit_claim(
