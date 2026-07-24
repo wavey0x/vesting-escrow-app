@@ -47,9 +47,9 @@ escrows on Ethereum mainnet.
 
 | Action | Condition |
 | --- | --- |
-| `Claim` | User is recipient or `open_claim` is enabled and claimable amount is non-zero |
-| `Revoke` | User is the current owner/revoker, escrow has locked principal, and vesting has not ended |
-| `Disown` / `Renounce Revocation` | User has the current legacy owner or v0.4 revoker authority |
+| `Claim` | User is recipient, or a version with permissionless claims has that setting enabled, and claimable amount is non-zero |
+| `Revoke` / `Rug Pull` | User is the current admin/owner/revoker, escrow has locked principal, and vesting has not ended |
+| `Disown` / `Renounce Ownership` / `Renounce Revocation` | User holds the corresponding authority; unsafe v0.1.0 renunciation is never offered |
 | `Claim Yield` | A v0.4 ERC-4626 escrow has claimable yield shares |
 
 ## Create Flow
@@ -91,7 +91,7 @@ The detail and list views read live escrow state on demand:
 - `locked()`
 - `total_claimed`
 - `total_locked`
-- `owner` or `revoker`
+- `admin`, `owner`, or `revoker`
 - `disabled_at`
 - `end_time`
 - `start_time`

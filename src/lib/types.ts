@@ -1,4 +1,9 @@
-export type EscrowVersion = 'v0.3.0' | 'llamapay-v2' | 'v0.4.0';
+export type EscrowVersion =
+  | 'v0.1.0'
+  | 'v0.2.0'
+  | 'v0.3.0'
+  | 'llamapay-v2'
+  | 'v0.4.0';
 export type EscrowKind = 'token' | 'erc4626';
 
 // Escrow data from index

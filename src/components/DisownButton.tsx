@@ -3,17 +3,22 @@ import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { Address } from 'viem';
 import Button from './Button';
 import { getEtherscanTxUrl } from '../lib/constants';
-import { legacyDisownAbi, v04RenounceAbi } from '../lib/contracts';
+import {
+  legacyDisownAbi,
+  legacyRenounceOwnershipAbi,
+  v04RenounceAbi,
+} from '../lib/contracts';
+import { EscrowVersion } from '../lib/types';
 
 interface DisownButtonProps {
   escrowAddress: string;
-  isV04: boolean;
+  version: EscrowVersion;
   onSuccess?: () => void;
 }
 
 export default function DisownButton({
   escrowAddress,
-  isV04,
+  version,
   onSuccess,
 }: DisownButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
@@ -24,18 +29,27 @@ export default function DisownButton({
   });
 
   const handleDisown = () => {
-    if (isV04) {
+    if (version === 'v0.4.0') {
       writeContract({
         address: escrowAddress as Address,
         abi: v04RenounceAbi,
         functionName: 'renounce_revocation',
       });
-    } else {
+    } else if (version === 'v0.2.0') {
+      writeContract({
+        address: escrowAddress as Address,
+        abi: legacyRenounceOwnershipAbi,
+        functionName: 'renounce_ownership',
+      });
+    } else if (version === 'v0.3.0' || version === 'llamapay-v2') {
       writeContract({
         address: escrowAddress as Address,
         abi: legacyDisownAbi,
         functionName: 'disown',
       });
+    } else {
+      // v0.1.0 renunciation is intentionally unsupported.
+      return;
     }
     setShowConfirm(false);
   };
@@ -78,7 +92,9 @@ export default function DisownButton({
               ? 'Confirm in wallet...'
               : isConfirming
               ? 'Renouncing...'
-              : `Confirm ${isV04 ? 'Renounce' : 'Disown'}`}
+              : `Confirm ${version === 'v0.3.0' || version === 'llamapay-v2'
+                ? 'Disown'
+                : 'Renounce'}`}
           </Button>
           <Button variant="ghost" onClick={() => setShowConfirm(false)}>
             Cancel
@@ -91,7 +107,11 @@ export default function DisownButton({
   return (
     <div>
       <Button variant="secondary" onClick={() => setShowConfirm(true)}>
-        {isV04 ? 'Renounce Revocation' : 'Disown'}
+        {version === 'v0.4.0'
+          ? 'Renounce Revocation'
+          : version === 'v0.2.0'
+          ? 'Renounce Ownership'
+          : 'Disown'}
       </Button>
       {error && (
         <p className="mt-2 text-sm text-red-600 dark:text-red-400">

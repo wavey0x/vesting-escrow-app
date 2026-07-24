@@ -10,7 +10,48 @@ FACTORY = next(
     for factory in index_escrows.FACTORIES
     if factory["version"] == "v0.4.0"
 )
+V01_FACTORY = next(
+    factory
+    for factory in index_escrows.FACTORIES
+    if factory["version"] == "v0.1.0"
+)
+V02_FACTORY = next(
+    factory
+    for factory in index_escrows.FACTORIES
+    if factory["version"] == "v0.2.0"
+)
 TX_HASH = HexBytes("0x" + "11" * 32)
+
+
+class LegacyAdminIndexerTest(unittest.TestCase):
+    def test_historical_factories_are_configured(self):
+        self.assertEqual(V01_FACTORY["deployBlock"], 11_868_366)
+        self.assertEqual(V02_FACTORY["deployBlock"], 13_373_452)
+        self.assertEqual(V01_FACTORY["eventFormat"], "legacy-admin")
+        self.assertEqual(V02_FACTORY["eventFormat"], "legacy-admin")
+
+    def test_creation_event_normalization(self):
+        event = {
+            "args": {
+                "escrow": "0x1111111111111111111111111111111111111111",
+                "token": "0x2222222222222222222222222222222222222222",
+                "recipient": "0x3333333333333333333333333333333333333333",
+                "funder": "0x4444444444444444444444444444444444444444",
+                "amount": 100,
+                "vesting_start": 1_000,
+                "vesting_duration": 2_000,
+                "cliff_length": 100,
+            },
+            "blockNumber": 13_400_000,
+            "transactionHash": TX_HASH,
+        }
+
+        escrow = index_escrows.legacy_admin_event_to_escrow(event, V02_FACTORY)
+
+        self.assertEqual(escrow["version"], "v0.2.0")
+        self.assertEqual(escrow["kind"], "token")
+        self.assertEqual(escrow["amount"], "100")
+        self.assertFalse(escrow["openClaim"])
 
 
 class V04IndexerTest(unittest.TestCase):

@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { Address, zeroAddress } from 'viem';
+import { Address } from 'viem';
 import Button from './Button';
 import { formatTokenAmount } from '../lib/format';
 import { getEtherscanTxUrl } from '../lib/constants';
-import { legacyRevokeAbi, v04RevokeAbi } from '../lib/contracts';
+import { legacyRevokeAbi, legacyRugPullAbi, v04RevokeAbi } from '../lib/contracts';
+import { EscrowVersion } from '../lib/types';
 
 interface RevokeButtonProps {
   escrowAddress: string;
   locked: bigint;
   decimals: number;
   symbol?: string;
-  isV04: boolean;
+  version: EscrowVersion;
   receiver: string;
   onSuccess?: () => void;
 }
@@ -21,7 +22,7 @@ export default function RevokeButton({
   locked,
   decimals,
   symbol,
-  isV04,
+  version,
   receiver,
   onSuccess,
 }: RevokeButtonProps) {
@@ -33,20 +34,25 @@ export default function RevokeButton({
   });
 
   const handleRevoke = () => {
-    if (isV04) {
+    if (version === 'v0.4.0') {
       writeContract({
         address: escrowAddress as Address,
         abi: v04RevokeAbi,
         functionName: 'revoke',
         args: [receiver as Address],
       });
+    } else if (version === 'v0.1.0' || version === 'v0.2.0') {
+      writeContract({
+        address: escrowAddress as Address,
+        abi: legacyRugPullAbi,
+        functionName: 'rug_pull',
+      });
     } else {
-      // Legacy escrows use zero values for immediate revocation to msg.sender.
+      // The zero-argument Vyper overload uses block.timestamp and msg.sender.
       writeContract({
         address: escrowAddress as Address,
         abi: legacyRevokeAbi,
         functionName: 'revoke',
-        args: [zeroAddress, 0n],
       });
     }
     setShowConfirm(false);

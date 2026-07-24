@@ -1,5 +1,5 @@
 import { Escrow, EscrowStatus, LiveEscrowData, IndexedEscrow } from './types';
-import { hasRevoker, isRevoked } from './contracts';
+import { getEscrowVersion, hasRevoker, isRevoked } from './contracts';
 
 /**
  * Calculate escrow status from live data
@@ -177,6 +177,9 @@ export function canRevoke(escrow: Escrow, userAddress?: string): boolean {
 export function canDisown(escrow: Escrow, userAddress?: string): boolean {
   if (!isOwner(escrow, userAddress)) return false;
   if (!escrow.live) return false;
+  // v0.1.0 renounce_ownership() reopens initialization and must never be
+  // offered by the app.
+  if (getEscrowVersion(escrow) === 'v0.1.0') return false;
 
   return hasRevoker(escrow.live);
 }

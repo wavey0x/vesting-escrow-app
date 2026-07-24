@@ -2,8 +2,8 @@
 """
 Vesting Escrow Indexer
 
-Scans VestingEscrowFactory contracts for VestingEscrowCreated events
-and builds a JSON index of all escrows.
+Scans every supported VestingEscrowFactory creation-event version and builds a
+JSON index of all escrows.
 
 Usage:
     MAINNET_RPC=https://... python scripts/indexer/index_escrows.py [--refresh-logos]
@@ -101,11 +101,12 @@ TOKENS_FILE = DATA_DIR / "tokens.json"
 
 def load_factory_abi(event_format: str) -> list:
     """Load the ABI matching a factory's event version."""
-    filename = (
-        "VestingEscrowFactoryV04.json"
-        if event_format == "v0.4"
-        else "VestingEscrowFactory.json"
-    )
+    filenames = {
+        "legacy-admin": "VestingEscrowFactoryLegacyAdmin.json",
+        "legacy": "VestingEscrowFactory.json",
+        "v0.4": "VestingEscrowFactoryV04.json",
+    }
+    filename = filenames[event_format]
     abi_path = ABI_DIR / filename
     with open(abi_path) as f:
         return json.load(f)
@@ -148,8 +149,24 @@ def load_existing_data() -> dict:
         old_factory = data.pop("factory")
         old_last_block = data.pop("lastBlock", 0)
         data.pop("factoryDeployBlock", None)
+        old_factory_config = next(
+            (
+                factory
+                for factory in FACTORIES
+                if factory["address"].lower() == old_factory.lower()
+            ),
+            None,
+        )
+        old_deploy_block = (
+            old_factory_config["deployBlock"]
+            if old_factory_config
+            else 0
+        )
         data["factories"] = {
-            old_factory: {"deployBlock": FACTORIES[0]["deployBlock"], "lastBlock": old_last_block}
+            old_factory: {
+                "deployBlock": old_deploy_block,
+                "lastBlock": old_last_block,
+            }
         }
         # Tag existing escrows with the original factory
         for escrow in data["escrows"]:
@@ -163,6 +180,18 @@ def load_existing_data() -> dict:
                 "deployBlock": factory["deployBlock"],
                 "lastBlock": factory["deployBlock"] - 1,
             }
+
+    # Backfill versioned schema fields in indexes produced before multi-version
+    # live reads were introduced.
+    factories_by_address = {
+        factory["address"].lower(): factory
+        for factory in FACTORIES
+    }
+    for escrow in data["escrows"]:
+        factory = factories_by_address.get(escrow.get("factory", "").lower())
+        if factory:
+            escrow.setdefault("version", factory["version"])
+            escrow.setdefault("kind", "token")
 
     return data
 
@@ -195,6 +224,27 @@ def legacy_event_to_escrow(event, factory: dict) -> dict:
         "vestingDuration": args["vesting_duration"],
         "cliffLength": args["cliff_length"],
         "openClaim": args["open_claim"],
+        "blockNumber": event["blockNumber"],
+        "txHash": event["transactionHash"].hex(),
+    }
+
+
+def legacy_admin_event_to_escrow(event, factory: dict) -> dict:
+    """Convert a v0.1/v0.2 creation event to the shared schema."""
+    args = event["args"]
+    return {
+        "address": args["escrow"],
+        "factory": factory["address"],
+        "version": factory["version"],
+        "kind": "token",
+        "funder": args["funder"],
+        "token": args["token"].lower(),
+        "recipient": args["recipient"],
+        "amount": str(args["amount"]),
+        "vestingStart": args["vesting_start"],
+        "vestingDuration": args["vesting_duration"],
+        "cliffLength": args["cliff_length"],
+        "openClaim": False,
         "blockNumber": event["blockNumber"],
         "txHash": event["transactionHash"].hex(),
     }
@@ -249,11 +299,13 @@ def v04_erc4626_event_to_escrow(event, factory: dict) -> dict:
 
 def fetch_events(contract, from_block: int, to_block: int, factory: dict) -> list:
     """Fetch creation events using the factory's versioned event ABI."""
-    if factory["eventFormat"] == "legacy":
+    if factory["eventFormat"] in ("legacy-admin", "legacy"):
         events = contract.events.VestingEscrowCreated.get_logs(
             from_block=from_block,
             to_block=to_block,
         )
+        if factory["eventFormat"] == "legacy-admin":
+            return [legacy_admin_event_to_escrow(event, factory) for event in events]
         return [legacy_event_to_escrow(event, factory) for event in events]
 
     token_events = contract.events.TokenVestingEscrowCreated.get_logs(
@@ -319,11 +371,11 @@ def index_factory(w3: Web3, contract, data: dict, factory: dict, current_block: 
     factory_meta = data["factories"][factory_address]
     start_block = factory_meta["lastBlock"] + 1
 
-    if start_block >= current_block:
+    if start_block > current_block:
         print("  No new blocks to scan")
         return set()
 
-    total_blocks = current_block - start_block
+    total_blocks = current_block - start_block + 1
     num_chunks = (total_blocks + CHUNK_SIZE - 1) // CHUNK_SIZE
 
     print(f"  Scanning blocks {start_block:,} to {current_block:,} ({total_blocks:,} blocks, {num_chunks} chunks)")

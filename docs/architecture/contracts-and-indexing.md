@@ -8,6 +8,12 @@ This document captures the onchain contracts, indexer inputs, and app-side statu
 - Active Yearn v0.4.0 factory used by the create flow:
   - `0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215`
   - Deploy block: `25,602,335`
+- Historical Yearn v0.1.0 factory indexed by the app:
+  - `0xF124534bfa6Ac7b89483B401B4115Ec0d27cad6A`
+  - Deploy block: `11,868,366`
+- Historical Yearn v0.2.0 factory indexed by the app:
+  - `0x98d3872b4025ABE58C4667216047Fe549378d90f`
+  - Deploy block: `13,373,452`
 - Historical Yearn v0.3.0 factory indexed by the app:
   - `0x200C92Dd85730872Ab6A1e7d5E40A067066257cF`
   - Deploy block: `18,291,969`
@@ -18,6 +24,11 @@ This document captures the onchain contracts, indexer inputs, and app-side statu
 `config/deployments.json` is the shared source of truth for the active frontend
 factory and every indexer read source. Historical factories remain read-only
 integration targets.
+
+At block `25,602,656`, replaying each factory's own creation-event signature
+produces 67 v0.1.0, 85 v0.2.0, 165 v0.3.0, and 475 LlamaPay v2 escrows. The
+v0.4.0 factory had not yet emitted either creation event, for 792 indexed
+escrows in total: 317 from Yearn's own versions and 475 from LlamaPay.
 
 ## v0.4.0 VestingEscrowFactory
 
@@ -68,13 +79,17 @@ Key state surfaced by the app:
 | `total_locked` | Initial locked amount |
 | `total_claimed` | Claimed amount |
 | `disabled_at` | Revocation time, or `end_time` if active |
-| `open_claim` | Third-party claim toggle |
-| `owner` / `revoker` | Version-specific revocation authority |
+| `open_claim` | Third-party claim toggle, unavailable before v0.3.0 |
+| `admin` / `owner` / `revoker` | Version-specific revocation authority |
 
-Legacy actions remain `claim`, `revoke`, and `disown`. v0.4 standard escrows use
-`claim`, `revoke(receiver)`, and `renounce_revocation`; v0.4 ERC-4626 escrows
-use `claim_principal`, `claim_yield`, `revoke(receiver)`, and
-`renounce_revocation`.
+v0.1.0 and v0.2.0 escrows use recipient-only `claim` and admin-only
+`rug_pull`. v0.2.0 also supports `renounce_ownership`; the app deliberately
+hides v0.1.0 `renounce_ownership` because its
+[initialization bug](https://github.com/banteg/yearn-vesting-escrow/security/advisories/GHSA-vpxq-238p-8q3m)
+makes that action unsafe. v0.3-derived escrows use `claim`, `revoke`, and `disown`.
+v0.4 standard escrows use `claim`, `revoke(receiver)`, and
+`renounce_revocation`; v0.4 ERC-4626 escrows use `claim_principal`,
+`claim_yield`, `revoke(receiver)`, and `renounce_revocation`.
 
 Live-read plans are selected from indexed `version` and `kind`. Historical
 records without those fields are inferred from their factory address.
@@ -99,6 +114,7 @@ All Python indexer assets now live under `scripts/indexer/`:
 - `scripts/indexer/requirements.txt`
 - `scripts/indexer/setup-python.sh`
 - `scripts/indexer/abi/VestingEscrowFactory.json`
+- `scripts/indexer/abi/VestingEscrowFactoryLegacyAdmin.json`
 - `scripts/indexer/abi/VestingEscrowFactoryV04.json`
 - `scripts/indexer/abi/VestingEscrowSimple.json`
 

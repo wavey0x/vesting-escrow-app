@@ -3,6 +3,18 @@
   "activeFactory": "0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215",
   "factories": [
     {
+      "address": "0xF124534bfa6Ac7b89483B401B4115Ec0d27cad6A",
+      "deployBlock": 11868366,
+      "version": "v0.1.0",
+      "eventFormat": "legacy-admin"
+    },
+    {
+      "address": "0x98d3872b4025ABE58C4667216047Fe549378d90f",
+      "deployBlock": 13373452,
+      "version": "v0.2.0",
+      "eventFormat": "legacy-admin"
+    },
+    {
       "address": "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF",
       "deployBlock": 18291969,
       "version": "v0.3.0",

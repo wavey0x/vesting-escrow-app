@@ -18,10 +18,11 @@ The repository now contains all three parts of the system:
 
 The contract package is the upstream `yearn/yearn-vesting-escrow` v0.3.0 tag at
 commit `d14eed16f5b131bc35c58df2b8b4a03427928ef1`. That release is the source for
-the active Yearn factory `0x200C92Dd85730872Ab6A1e7d5E40A067066257cF`.
-The indexer also follows the compatible LlamaPay v2 factory
-`0xcf61782465Ff973638143d6492B51A85986aB347`; it is an actively used read
-source, not the frontend's current write target.
+the historical Yearn v0.3.0 factory
+`0x200C92Dd85730872Ab6A1e7d5E40A067066257cF`. The indexer also follows Yearn
+v0.1.0 and v0.2.0 plus the compatible LlamaPay v2 factory
+`0xcf61782465Ff973638143d6492B51A85986aB347`. They are read sources, not the
+frontend's current write target.
 
 The local unreleased source ports the LlamaPay v2 fork's escrow registry, zero default
 donation, revoke checks-effects-interactions ordering, and dust-solvency

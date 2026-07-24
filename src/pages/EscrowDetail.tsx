@@ -349,7 +349,7 @@ export default function EscrowDetail() {
                 locked={amounts.locked}
                 decimals={decimals}
                 symbol={tokenMetadata?.symbol}
-                isV04={version === 'v0.4.0'}
+                version={version}
                 receiver={userAddress || escrow.recipient}
                 onSuccess={() => refetch()}
               />
@@ -357,7 +357,7 @@ export default function EscrowDetail() {
             {showDisown && (
               <DisownButton
                 escrowAddress={escrow.address}
-                isV04={version === 'v0.4.0'}
+                version={version}
                 onSuccess={() => refetch()}
               />
             )}
@@ -425,7 +425,13 @@ export default function EscrowDetail() {
             <AddressDisplay address={escrow.funder} />
           </DetailRow>
           {liveData && (
-            <DetailRow label={version === 'v0.4.0' ? 'Revoker' : 'Owner'}>
+            <DetailRow label={
+              version === 'v0.4.0'
+                ? 'Revoker'
+                : version === 'v0.1.0' || version === 'v0.2.0'
+                ? 'Admin'
+                : 'Owner'
+            }>
               <div className="flex items-center gap-2">
                 <AddressDisplay address={liveData.owner} />
                 {userIsOwner && (

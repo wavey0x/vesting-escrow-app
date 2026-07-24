@@ -139,7 +139,19 @@ export const v04FactoryAbi = [
   },
 ] as const;
 
-const legacyEscrowReadAbi = [
+const legacyAdminEscrowReadAbi = [
+  viewFunction('unclaimed', 'uint256'),
+  viewFunction('locked', 'uint256'),
+  viewFunction('total_claimed', 'uint256'),
+  viewFunction('total_locked', 'uint256'),
+  viewFunction('admin', 'address'),
+  viewFunction('disabled_at', 'uint256'),
+  viewFunction('end_time', 'uint256'),
+  viewFunction('start_time', 'uint256'),
+  viewFunction('cliff_length', 'uint256'),
+] as const;
+
+const legacyOwnerEscrowReadAbi = [
   viewFunction('unclaimed', 'uint256'),
   viewFunction('locked', 'uint256'),
   viewFunction('total_claimed', 'uint256'),
@@ -179,7 +191,14 @@ const v04Erc4626EscrowReadAbi = [
   viewFunction('yield_recipient', 'address'),
 ] as const;
 
-export const legacyClaimAbi = [
+export const legacyAdminClaimAbi = [
+  writeFunction('claim', [
+    { name: 'beneficiary', type: 'address' },
+    { name: 'amount', type: 'uint256' },
+  ]),
+] as const;
+
+export const legacyOwnerClaimAbi = [
   writeFunction('claim', [
     { name: 'beneficiary', type: 'address' },
     { name: 'amount', type: 'uint256' },
@@ -202,17 +221,16 @@ export const v04Erc4626ClaimAbi = [
 ] as const;
 
 export const legacyRevokeAbi = [
-  writeFunction('revoke', [
-    { name: 'beneficiary', type: 'address' },
-    { name: 'ts', type: 'uint256' },
-  ]),
+  writeFunction('revoke', []),
 ] as const;
 
+export const legacyRugPullAbi = [writeFunction('rug_pull', [])] as const;
 export const v04RevokeAbi = [
   writeFunction('revoke', [{ name: 'receiver', type: 'address' }]),
 ] as const;
 
 export const legacyDisownAbi = [writeFunction('disown', [])] as const;
+export const legacyRenounceOwnershipAbi = [writeFunction('renounce_ownership', [])] as const;
 export const v04RenounceAbi = [writeFunction('renounce_revocation', [])] as const;
 
 type ContractRead = {
@@ -310,6 +328,42 @@ export function buildLiveReadPlan(escrow: IndexedEscrow): LiveReadPlan {
   const version = getEscrowVersion(escrow);
   const kind = getEscrowKind(escrow);
 
+  if (version === 'v0.1.0' || version === 'v0.2.0') {
+    const functionNames = [
+      'unclaimed',
+      'locked',
+      'total_claimed',
+      'total_locked',
+      'admin',
+      'disabled_at',
+      'end_time',
+      'start_time',
+      'cliff_length',
+    ] as const;
+    return {
+      contracts: readContracts(address, legacyAdminEscrowReadAbi as Abi, functionNames),
+      parse: (results) => {
+        if (!allSucceeded(results, functionNames.length)) return undefined;
+        const disabledAt = results[5].result as bigint;
+        const endTime = results[6].result as bigint;
+        return {
+          unclaimed: results[0].result as bigint,
+          // v0.1/v0.2 locked() reports the amount already clawed back after
+          // rug_pull(), rather than remaining beneficiary entitlement.
+          locked: disabledAt < endTime ? 0n : results[1].result as bigint,
+          totalClaimed: results[2].result as bigint,
+          totalLocked: results[3].result as bigint,
+          owner: results[4].result as string,
+          disabledAt,
+          endTime,
+          startTime: results[7].result as bigint,
+          cliffLength: results[8].result as bigint,
+          openClaim: false,
+        };
+      },
+    };
+  }
+
   if (version !== 'v0.4.0') {
     const functionNames = [
       'unclaimed',
@@ -324,7 +378,7 @@ export function buildLiveReadPlan(escrow: IndexedEscrow): LiveReadPlan {
       'open_claim',
     ] as const;
     return {
-      contracts: readContracts(address, legacyEscrowReadAbi as Abi, functionNames),
+      contracts: readContracts(address, legacyOwnerEscrowReadAbi as Abi, functionNames),
       parse: (results) => {
         if (!allSucceeded(results, functionNames.length)) return undefined;
         return {
@@ -425,7 +479,10 @@ export function getClaimConfig(escrow: IndexedEscrow) {
   if (version === 'v0.4.0') {
     return { abi: v04StandardClaimAbi, functionName: 'claim' as const };
   }
-  return { abi: legacyClaimAbi, functionName: 'claim' as const };
+  if (version === 'v0.1.0' || version === 'v0.2.0') {
+    return { abi: legacyAdminClaimAbi, functionName: 'claim' as const };
+  }
+  return { abi: legacyOwnerClaimAbi, functionName: 'claim' as const };
 }
 
 export function isRevoked(escrow: IndexedEscrow, live: LiveEscrowData): boolean {

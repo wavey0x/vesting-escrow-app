@@ -6,8 +6,8 @@ event indexer, and a historical Vyper contract development package.
 The app creates standard ERC-20 and ERC-4626 escrows through the released
 [`yearn/yearn-vesting-escrow` v0.4.0 factory](https://github.com/yearn/yearn-vesting-escrow/tree/v0.4.0)
 at `0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215`. It continues to index
-the Yearn v0.3.0 and LlamaPay v2 factories so existing escrow links and searches
-remain available.
+every Yearn mainnet factory from v0.1.0 onward, plus LlamaPay v2, so historical
+escrow links and searches remain available.
 
 ## Repository layout
 
