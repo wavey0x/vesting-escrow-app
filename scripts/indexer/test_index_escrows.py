@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from hexbytes import HexBytes
 
@@ -143,6 +144,64 @@ class V04IndexerTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "does not match configured factory"):
             index_escrows.v04_token_event_to_escrow(event, FACTORY)
+
+
+class TokenMetadataTest(unittest.TestCase):
+    TOKEN = "0x2222222222222222222222222222222222222222"
+    TRUST_WALLET_LOGO = (
+        "https://raw.githubusercontent.com/trustwallet/assets/master/"
+        f"blockchains/ethereum/assets/{TOKEN}/logo.png"
+    )
+    SMOL_LOGO = f"https://assets.smold.app/api/token/1/{TOKEN}/logo-128.png"
+
+    def token_data(self):
+        return {
+            "lastUpdated": "2026-07-24T00:00:00+00:00",
+            "tokens": {
+                self.TOKEN: {
+                    "symbol": "TEST",
+                    "name": "Test Token",
+                    "decimals": 18,
+                    "logoUrl": self.TRUST_WALLET_LOGO,
+                }
+            },
+        }
+
+    def test_noop_logo_refresh_preserves_last_updated(self):
+        tokens_data = self.token_data()
+
+        with patch.object(
+            index_escrows,
+            "find_logo_url",
+            return_value=(self.TRUST_WALLET_LOGO, "TrustWallet"),
+        ):
+            result = index_escrows.update_token_metadata(
+                None,
+                tokens_data,
+                set(),
+                refresh_logos=True,
+            )
+
+        self.assertEqual(result["lastUpdated"], "2026-07-24T00:00:00+00:00")
+        self.assertEqual(result["tokens"][self.TOKEN]["logoUrl"], self.TRUST_WALLET_LOGO)
+
+    def test_logo_upgrade_updates_metadata_timestamp(self):
+        tokens_data = self.token_data()
+
+        with patch.object(
+            index_escrows,
+            "find_logo_url",
+            return_value=(self.SMOL_LOGO, "SmolDapp"),
+        ):
+            result = index_escrows.update_token_metadata(
+                None,
+                tokens_data,
+                set(),
+                refresh_logos=True,
+            )
+
+        self.assertNotEqual(result["lastUpdated"], "2026-07-24T00:00:00+00:00")
+        self.assertEqual(result["tokens"][self.TOKEN]["logoUrl"], self.SMOL_LOGO)
 
 
 if __name__ == "__main__":

@@ -2,8 +2,19 @@ name: Index Escrows
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # Daily at midnight UTC
-  workflow_dispatch:      # Manual trigger
+    - cron: '0 1-23 * * *' # Lightweight hourly runs, excluding midnight UTC
+    - cron: '0 0 * * *'    # Midnight run also refreshes existing token logos
+  workflow_dispatch:
+    inputs:
+      refresh_logos:
+        description: Re-check existing token logos
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: index-escrows
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -11,6 +22,7 @@ permissions:
 jobs:
   index:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -37,21 +49,22 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/indexer/requirements.txt
 
-      - name: Create venv and install dependencies
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install --upgrade pip
-          pip install -r scripts/indexer/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install --disable-pip-version-check -r scripts/indexer/requirements.txt
 
       - name: Run indexer
-        run: |
-          source .venv/bin/activate
-          python -m unittest scripts.indexer.test_index_escrows
-          python scripts/indexer/index_escrows.py --refresh-logos
         env:
           MAINNET_RPC: ${{ secrets.MAINNET_RPC }}
+          REFRESH_LOGOS: ${{ github.event.schedule == '0 0 * * *' || inputs.refresh_logos }}
+        run: |
+          indexer_args=()
+          if [[ "$REFRESH_LOGOS" == "true" ]]; then
+            indexer_args+=(--refresh-logos)
+          fi
+          python scripts/indexer/index_escrows.py "${indexer_args[@]}"
 
       - name: Count escrows after indexing
         id: after
@@ -76,17 +89,33 @@ jobs:
           before=${{ steps.before.outputs.count }}
           after=${{ steps.after.outputs.count }}
           new_escrows=$((after - before))
-          if [ "$new_escrows" -gt 0 ]; then
-            echo "has_new_escrows=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_new_escrows=false" >> "$GITHUB_OUTPUT"
+          token_metadata_changed=false
+          if ! git diff --quiet -- public/data/tokens.json; then
+            token_metadata_changed=true
           fi
-          echo "new_escrows=$new_escrows" >> "$GITHUB_OUTPUT"
+
+          if [ "$new_escrows" -gt 0 ]; then
+            has_index_changes=true
+            commit_message="chore: index $new_escrows new escrow(s) [skip ci]"
+          elif [ "$token_metadata_changed" = "true" ]; then
+            has_index_changes=true
+            commit_message="chore: refresh token metadata [skip ci]"
+          else
+            has_index_changes=false
+            commit_message=""
+          fi
+
+          {
+            echo "has_index_changes=$has_index_changes"
+            echo "new_escrows=$new_escrows"
+            echo "token_metadata_changed=$token_metadata_changed"
+            echo "commit_message=$commit_message"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Commit updated index
-        if: steps.delta.outputs.has_new_escrows == 'true'
+        if: steps.delta.outputs.has_index_changes == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: index ${{ steps.delta.outputs.new_escrows }} new escrow(s) [skip ci]"
+          commit_message: ${{ steps.delta.outputs.commit_message }}
           file_pattern: "public/data/escrows.json public/data/tokens.json"
           commit_author: "GitHub Actions <actions@github.com>"
