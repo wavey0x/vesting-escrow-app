@@ -9,6 +9,8 @@ import {
   v04RenounceAbi,
 } from '../lib/contracts';
 import { EscrowVersion } from '../lib/types';
+import { CHAIN_ID } from '../lib/constants';
+import { useMainnetWrite } from '../hooks/useMainnetWrite';
 
 interface DisownButtonProps {
   escrowAddress: string;
@@ -23,26 +25,36 @@ export default function DisownButton({
 }: DisownButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const { data: hash, isPending, writeContract, error } = useWriteContract();
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
+    chainId: CHAIN_ID,
   });
 
   const handleDisown = () => {
     if (version === 'v0.4.0') {
       writeContract({
+        chainId: CHAIN_ID,
         address: escrowAddress as Address,
         abi: v04RenounceAbi,
         functionName: 'renounce_revocation',
       });
     } else if (version === 'v0.2.0') {
       writeContract({
+        chainId: CHAIN_ID,
         address: escrowAddress as Address,
         abi: legacyRenounceOwnershipAbi,
         functionName: 'renounce_ownership',
       });
     } else if (version === 'v0.3.0' || version === 'llamapay-v2') {
       writeContract({
+        chainId: CHAIN_ID,
         address: escrowAddress as Address,
         abi: legacyDisownAbi,
         functionName: 'disown',
@@ -71,6 +83,25 @@ export default function DisownButton({
         >
           View tx
         </a>
+      </div>
+    );
+  }
+
+  if (!isMainnet) {
+    return (
+      <div>
+        <Button
+          variant="secondary"
+          onClick={switchToMainnet}
+          loading={isSwitching}
+        >
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum'}
+        </Button>
+        {switchError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </p>
+        )}
       </div>
     );
   }

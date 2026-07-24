@@ -1,14 +1,39 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { Address, decodeEventLog, parseUnits, isAddress, maxUint256 } from 'viem';
+import {
+  useAccount,
+  usePublicClient,
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from 'wagmi';
+import { Address, formatUnits, parseUnits, isAddress } from 'viem';
 import Button from '../components/Button';
-import { FACTORY_ADDRESS, DURATION_PRESETS, DURATION_UNITS } from '../lib/constants';
+import {
+  CHAIN_ID,
+  FACTORY_ADDRESS,
+  DURATION_PRESETS,
+  DURATION_UNITS,
+  getEtherscanTxUrl,
+} from '../lib/constants';
 import TokenAmount from '../components/TokenAmount';
 import { erc20Abi, erc4626VaultAbi, v04FactoryAbi } from '../lib/contracts';
 import { EscrowKind } from '../lib/types';
+import {
+  ERC4626DeploymentInput,
+  ExpectedCreation,
+  ReceiptLog,
+  TokenDeploymentInput,
+  buildERC4626DeploymentArgs,
+  buildTokenDeploymentArgs,
+  defaultYieldRecipient,
+  findCreatedEscrow,
+  fundingApprovalAmount,
+  shareCapCoversQuote,
+} from '../lib/createEscrow';
+import { useMainnetWrite } from '../hooks/useMainnetWrite';
 
-type Step = 'form' | 'approve' | 'deploy' | 'success';
+type Step = 'form' | 'approve' | 'deploy' | 'success' | 'verification-error';
 
 export default function Create() {
   const navigate = useNavigate();
@@ -19,7 +44,10 @@ export default function Create() {
   const [tokenAddress, setTokenAddress] = useState('');
   const [recipient, setRecipient] = useState('');
   const [yieldRecipient, setYieldRecipient] = useState('');
+  const [yieldRecipientEdited, setYieldRecipientEdited] = useState(false);
   const [amount, setAmount] = useState('');
+  const [maxFundedSharesInput, setMaxFundedSharesInput] = useState('');
+  const [maxFundedSharesEdited, setMaxFundedSharesEdited] = useState(false);
   const [durationValue, setDurationValue] = useState('1');
   const [durationUnit, setDurationUnit] = useState(DURATION_UNITS[2].value); // years
   const [cliffValue, setCliffValue] = useState('0');
@@ -30,12 +58,21 @@ export default function Create() {
 
   const [step, setStep] = useState<Step>('form');
   const [createdEscrow, setCreatedEscrow] = useState<string>('');
+  const [transactionValidationError, setTransactionValidationError] = useState('');
+  const pendingCreation = useRef<ExpectedCreation>();
+  const publicClient = usePublicClient({ chainId: CHAIN_ID });
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
 
   useEffect(() => {
-    if (userAddress && !yieldRecipient) {
-      setYieldRecipient(userAddress);
-    }
-  }, [userAddress, yieldRecipient]);
+    setYieldRecipient((currentValue) => (
+      defaultYieldRecipient(currentValue, yieldRecipientEdited, userAddress)
+    ));
+  }, [userAddress, yieldRecipientEdited]);
 
   // Funding token or vault data
   const validTokenAddress = isAddress(tokenAddress) ? tokenAddress : undefined;
@@ -112,7 +149,7 @@ export default function Create() {
     }
   }, [amount, decimals]);
 
-  const { data: quotedShares } = useReadContract({
+  const { data: quotedShares, refetch: refetchQuotedShares } = useReadContract({
     address: FACTORY_ADDRESS,
     abi: v04FactoryAbi,
     functionName: 'preview_erc4626_funding',
@@ -122,11 +159,42 @@ export default function Create() {
     },
   });
 
+  useEffect(() => {
+    if (
+      escrowKind !== 'erc4626'
+      || maxFundedSharesEdited
+      || quotedShares === undefined
+      || fundingDecimals === undefined
+    ) {
+      return;
+    }
+
+    setMaxFundedSharesInput(formatUnits(quotedShares, fundingDecimals));
+  }, [escrowKind, fundingDecimals, maxFundedSharesEdited, quotedShares]);
+
+  const maxFundedShares = useMemo(() => {
+    try {
+      if (!maxFundedSharesInput || fundingDecimals === undefined) return 0n;
+      return parseUnits(maxFundedSharesInput, fundingDecimals);
+    } catch {
+      return 0n;
+    }
+  }, [fundingDecimals, maxFundedSharesInput]);
+
   const fundingAmount = escrowKind === 'erc4626'
     ? quotedShares ?? 0n
     : amountParsed;
-  const needsApproval = fundingAllowance !== undefined && fundingAmount > fundingAllowance;
+  const approvalAmount = fundingApprovalAmount(
+    escrowKind,
+    amountParsed,
+    maxFundedShares,
+  );
+  const needsApproval = fundingAllowance !== undefined && approvalAmount > fundingAllowance;
   const hasBalance = fundingBalance !== undefined && fundingAmount > 0n && fundingAmount <= fundingBalance;
+  const shareCapIsValid = escrowKind === 'token' || (
+    quotedShares !== undefined
+    && shareCapCoversQuote(quotedShares, maxFundedShares)
+  );
   const recipientIsValid = isAddress(recipient)
     && recipient.toLowerCase() !== tokenAddress.toLowerCase()
     && recipient.toLowerCase() !== userAddress?.toLowerCase();
@@ -145,7 +213,7 @@ export default function Create() {
   } = useWriteContract();
 
   const { isLoading: approveConfirming, isSuccess: approveSuccess } =
-    useWaitForTransactionReceipt({ hash: approveHash });
+    useWaitForTransactionReceipt({ hash: approveHash, chainId: CHAIN_ID });
 
   // Deploy transaction
   const {
@@ -156,61 +224,125 @@ export default function Create() {
   } = useWriteContract();
 
   const { isLoading: deployConfirming, isSuccess: deploySuccess, data: deployReceipt } =
-    useWaitForTransactionReceipt({ hash: deployHash });
+    useWaitForTransactionReceipt({ hash: deployHash, chainId: CHAIN_ID });
 
   // Handle approve
   const handleApprove = () => {
-    if (!validTokenAddress) return;
+    if (!validTokenAddress || !isMainnet || approvalAmount === 0n) return;
+    setTransactionValidationError('');
     setStep('approve');
     approve({
+      chainId: CHAIN_ID,
       address: validTokenAddress as Address,
       abi: erc20Abi,
       functionName: 'approve',
-      args: [FACTORY_ADDRESS, maxUint256],
+      args: [FACTORY_ADDRESS, approvalAmount],
     });
   };
 
   // Handle deploy
-  const handleDeploy = () => {
-    if (!validTokenAddress || !isAddress(recipient) || !userAddress) return;
-    setStep('deploy');
-    if (escrowKind === 'erc4626') {
-      if (!quotedShares || !isAddress(yieldRecipient)) return;
-      deploy({
-        address: FACTORY_ADDRESS,
-        abi: v04FactoryAbi,
-        functionName: 'deploy_erc4626_vesting',
-        args: [
-          validTokenAddress as Address,
-          recipient as Address,
-          amountParsed,
-          quotedShares,
-          BigInt(duration),
-          BigInt(startTime),
-          BigInt(cliff),
-          openClaim,
-          userAddress as Address,
-          yieldRecipient as Address,
-        ],
-      });
+  const handleDeploy = async () => {
+    if (
+      !validTokenAddress
+      || !isAddress(recipient)
+      || !userAddress
+      || !isMainnet
+      || !publicClient
+    ) {
       return;
     }
 
-    deploy({
-      address: FACTORY_ADDRESS,
-      abi: v04FactoryAbi,
-      functionName: 'deploy_vesting_contract',
-      args: [
-        validTokenAddress as Address,
-        recipient as Address,
-        amountParsed,
-        BigInt(duration),
-        BigInt(startTime),
-        BigInt(cliff),
-        openClaim,
-        userAddress as Address,
-      ],
-    });
+    setTransactionValidationError('');
+
+    try {
+      if (escrowKind === 'erc4626') {
+        if (
+          !isAddress(yieldRecipient)
+          || !vaultAsset
+          || maxFundedShares === 0n
+        ) {
+          return;
+        }
+
+        const refreshedQuote = (await refetchQuotedShares()).data;
+        if (
+          refreshedQuote === undefined
+          || !shareCapCoversQuote(refreshedQuote, maxFundedShares)
+        ) {
+          setTransactionValidationError(
+            'The refreshed funding quote exceeds your maximum. Increase the maximum or retry with the current quote.',
+          );
+          return;
+        }
+
+        const input: ERC4626DeploymentInput = {
+          vault: validTokenAddress,
+          assetToken: vaultAsset,
+          recipient,
+          principalAssets: amountParsed,
+          maxFundedShares,
+          duration: BigInt(duration),
+          startTime: BigInt(startTime),
+          cliff: BigInt(cliff),
+          permissionlessClaims: openClaim,
+          revoker: userAddress,
+          yieldRecipient,
+        };
+        const args = buildERC4626DeploymentArgs(input);
+        await publicClient.simulateContract({
+          account: userAddress,
+          address: FACTORY_ADDRESS,
+          abi: v04FactoryAbi,
+          functionName: 'deploy_erc4626_vesting',
+          args,
+        });
+
+        pendingCreation.current = { kind: 'erc4626', ...input };
+        setStep('deploy');
+        deploy({
+          chainId: CHAIN_ID,
+          address: FACTORY_ADDRESS,
+          abi: v04FactoryAbi,
+          functionName: 'deploy_erc4626_vesting',
+          args,
+        });
+        return;
+      }
+
+      const input: TokenDeploymentInput = {
+        token: validTokenAddress,
+        recipient,
+        amount: amountParsed,
+        duration: BigInt(duration),
+        startTime: BigInt(startTime),
+        cliff: BigInt(cliff),
+        permissionlessClaims: openClaim,
+        revoker: userAddress,
+      };
+      const args = buildTokenDeploymentArgs(input);
+      await publicClient.simulateContract({
+        account: userAddress,
+        address: FACTORY_ADDRESS,
+        abi: v04FactoryAbi,
+        functionName: 'deploy_vesting_contract',
+        args,
+      });
+
+      pendingCreation.current = { kind: 'token', ...input };
+      setStep('deploy');
+      deploy({
+        chainId: CHAIN_ID,
+        address: FACTORY_ADDRESS,
+        abi: v04FactoryAbi,
+        functionName: 'deploy_vesting_contract',
+        args,
+      });
+    } catch {
+      setStep('form');
+      setTransactionValidationError(
+        'Deployment simulation failed. Refresh balances and allowances, then try again.',
+      );
+    }
   };
 
   // Effect: After approval success, refetch allowance and continue
@@ -223,29 +355,30 @@ export default function Create() {
 
   // Effect: After deploy success, extract created escrow address
   useEffect(() => {
-    if (!deploySuccess || !deployReceipt || step !== 'deploy') return;
-
-    const expectedEvent = escrowKind === 'erc4626'
-      ? 'ERC4626VestingEscrowCreated'
-      : 'TokenVestingEscrowCreated';
-
-    for (const log of deployReceipt.logs) {
-      try {
-        const decoded = decodeEventLog({
-          abi: v04FactoryAbi,
-          data: log.data,
-          topics: log.topics,
-        });
-        if (decoded.eventName === expectedEvent && 'escrow' in decoded.args) {
-          setCreatedEscrow(decoded.args.escrow as string);
-          setStep('success');
-          return;
-        }
-      } catch {
-        // Ignore unrelated receipt logs.
-      }
+    if (
+      !deploySuccess
+      || !deployReceipt
+      || step !== 'deploy'
+      || !pendingCreation.current
+    ) {
+      return;
     }
-  }, [deployReceipt, deploySuccess, escrowKind, step]);
+
+    const escrow = findCreatedEscrow(
+      deployReceipt.logs as ReceiptLog[],
+      pendingCreation.current,
+    );
+    if (!escrow) {
+      setTransactionValidationError(
+        'The transaction succeeded, but its factory event did not match the submitted configuration.',
+      );
+      setStep('verification-error');
+      return;
+    }
+
+    setCreatedEscrow(escrow);
+    setStep('success');
+  }, [deployReceipt, deploySuccess, step]);
 
   // Validation
   const isValidForm =
@@ -260,6 +393,7 @@ export default function Create() {
       !!vaultAsset
       && !!quotedShares
       && quotedShares > 0n
+      && shareCapIsValid
       && yieldRecipientIsValid
     )) &&
     Number.isFinite(duration) &&
@@ -292,6 +426,31 @@ export default function Create() {
     );
   }
 
+  if (step === 'verification-error') {
+    return (
+      <div className="max-w-xl mx-auto text-center py-12">
+        <h1 className="text-2xl font-bold text-primary mb-4">
+          Escrow Receipt Verification Failed
+        </h1>
+        <p className="text-secondary mb-6">
+          The transaction succeeded, but the factory event did not exactly
+          match the submitted configuration. Do not submit another deployment
+          until you inspect this transaction.
+        </p>
+        {deployHash && (
+          <a
+            href={getEtherscanTxUrl(deployHash)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-primary underline"
+          >
+            View transaction on Etherscan
+          </a>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-xl mx-auto">
       <h1 className="text-2xl font-bold text-primary mb-2">Create Escrow</h1>
@@ -316,6 +475,9 @@ export default function Create() {
                   setEscrowKind(kind);
                   setTokenAddress('');
                   setAmount('');
+                  setMaxFundedSharesInput('');
+                  setMaxFundedSharesEdited(false);
+                  setTransactionValidationError('');
                   setStep('form');
                 }}
                 className={`px-4 py-2 border rounded transition-colors ${
@@ -338,7 +500,12 @@ export default function Create() {
           <input
             type="text"
             value={tokenAddress}
-            onChange={(e) => setTokenAddress(e.target.value)}
+            onChange={(e) => {
+              setTokenAddress(e.target.value);
+              setMaxFundedSharesInput('');
+              setMaxFundedSharesEdited(false);
+              setTransactionValidationError('');
+            }}
             placeholder="0x..."
             className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary font-mono"
           />
@@ -384,7 +551,10 @@ export default function Create() {
             <input
               type="text"
               value={yieldRecipient}
-              onChange={(event) => setYieldRecipient(event.target.value)}
+              onChange={(event) => {
+                setYieldRecipient(event.target.value);
+                setYieldRecipientEdited(true);
+              }}
               placeholder="0x..."
               className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary font-mono"
             />
@@ -407,7 +577,10 @@ export default function Create() {
           <input
             type="text"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setAmount(e.target.value);
+              setTransactionValidationError('');
+            }}
             placeholder="0.0"
             className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
           />
@@ -418,12 +591,41 @@ export default function Create() {
           )}
           {escrowKind === 'erc4626' && quotedShares !== undefined && (
             <p className="mt-2 text-sm text-secondary">
-              Funding quote:{' '}
+              Current funding quote:{' '}
               <TokenAmount value={quotedShares} decimals={fundingDecimals ?? 18} />{' '}
               {fundingSymbol || 'vault'} shares
             </p>
           )}
         </div>
+
+        {escrowKind === 'erc4626' && (
+          <div>
+            <label className="block text-sm font-medium text-primary mb-2">
+              Maximum Funding Shares
+            </label>
+            <input
+              type="text"
+              value={maxFundedSharesInput}
+              onChange={(event) => {
+                setMaxFundedSharesInput(event.target.value);
+                setMaxFundedSharesEdited(true);
+                setTransactionValidationError('');
+              }}
+              placeholder="0.0"
+              className="w-full px-4 py-2 border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
+            />
+            {quotedShares !== undefined && maxFundedShares > 0n && !shareCapIsValid && (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                Maximum funding shares must cover the current quote.
+              </p>
+            )}
+            <p className="mt-2 text-sm text-tertiary">
+              This is the most the factory may spend. The quote is refreshed and
+              simulated before submission, and only the execution-time quote is
+              transferred. Increase the maximum for delayed multisig execution.
+            </p>
+          </div>
+        )}
 
         {/* Duration */}
         <div>
@@ -563,7 +765,15 @@ export default function Create() {
 
         {/* Actions */}
         <div className="pt-4 border-t border-divider-subtle">
-          {needsApproval ? (
+          {!isMainnet ? (
+            <Button
+              onClick={switchToMainnet}
+              loading={isSwitching}
+              className="w-full"
+            >
+              {isSwitching ? 'Switching...' : 'Switch to Ethereum'}
+            </Button>
+          ) : needsApproval ? (
             <Button
               onClick={handleApprove}
               loading={approvePending || approveConfirming}
@@ -591,11 +801,21 @@ export default function Create() {
             </Button>
           )}
 
-          {(approveError || deployError) && (
+          {!isMainnet && (
+            <p className="mt-3 text-sm text-tertiary text-center">
+              Transactions are available only on Ethereum mainnet.
+            </p>
+          )}
+
+          {(approveError || deployError || switchError || transactionValidationError) && (
             <p className="mt-4 text-sm text-red-600 dark:text-red-400 text-center">
-              {(approveError || deployError)?.message.includes('User rejected')
-                ? 'Transaction rejected'
-                : 'Transaction failed'}
+              {transactionValidationError || (
+                (approveError || deployError)?.message.includes('User rejected')
+                  ? 'Transaction rejected'
+                  : switchError
+                  ? 'Failed to switch to Ethereum'
+                  : 'Transaction failed'
+              )}
             </p>
           )}
         </div>

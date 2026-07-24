@@ -208,8 +208,22 @@ def load_existing_tokens() -> dict:
         }
 
 
+def validate_event_source(event, factory: dict) -> None:
+    """Reject a creation event unless it was emitted by the configured factory."""
+    event_address = event.get("address")
+    if (
+        not isinstance(event_address, str)
+        or event_address.lower() != factory["address"].lower()
+    ):
+        raise ValueError(
+            f"creation event source {event_address!r} does not match "
+            f"configured factory {factory['address']}"
+        )
+
+
 def legacy_event_to_escrow(event, factory: dict) -> dict:
     """Convert a legacy VestingEscrowCreated event to the shared schema."""
+    validate_event_source(event, factory)
     args = event["args"]
     return {
         "address": args["escrow"],
@@ -231,6 +245,7 @@ def legacy_event_to_escrow(event, factory: dict) -> dict:
 
 def legacy_admin_event_to_escrow(event, factory: dict) -> dict:
     """Convert a v0.1/v0.2 creation event to the shared schema."""
+    validate_event_source(event, factory)
     args = event["args"]
     return {
         "address": args["escrow"],
@@ -252,6 +267,7 @@ def legacy_admin_event_to_escrow(event, factory: dict) -> dict:
 
 def v04_token_event_to_escrow(event, factory: dict) -> dict:
     """Convert a v0.4 TokenVestingEscrowCreated event to the shared schema."""
+    validate_event_source(event, factory)
     args = event["args"]
     return {
         "address": args["escrow"],
@@ -274,6 +290,7 @@ def v04_token_event_to_escrow(event, factory: dict) -> dict:
 
 def v04_erc4626_event_to_escrow(event, factory: dict) -> dict:
     """Convert a v0.4 ERC4626VestingEscrowCreated event to the shared schema."""
+    validate_event_source(event, factory)
     args = event["args"]
     return {
         "address": args["escrow"],

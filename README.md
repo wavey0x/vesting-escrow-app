@@ -31,6 +31,7 @@ npm install
 npm run dev
 npm run build
 npm run lint
+npm run test:frontend
 ```
 
 ## Indexer

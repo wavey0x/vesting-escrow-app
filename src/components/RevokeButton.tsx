@@ -6,6 +6,8 @@ import { formatTokenAmount } from '../lib/format';
 import { getEtherscanTxUrl } from '../lib/constants';
 import { legacyRevokeAbi, legacyRugPullAbi, v04RevokeAbi } from '../lib/contracts';
 import { EscrowVersion } from '../lib/types';
+import { CHAIN_ID } from '../lib/constants';
+import { useMainnetWrite } from '../hooks/useMainnetWrite';
 
 interface RevokeButtonProps {
   escrowAddress: string;
@@ -28,14 +30,22 @@ export default function RevokeButton({
 }: RevokeButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const { data: hash, isPending, writeContract, error } = useWriteContract();
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
+    chainId: CHAIN_ID,
   });
 
   const handleRevoke = () => {
     if (version === 'v0.4.0') {
       writeContract({
+        chainId: CHAIN_ID,
         address: escrowAddress as Address,
         abi: v04RevokeAbi,
         functionName: 'revoke',
@@ -43,6 +53,7 @@ export default function RevokeButton({
       });
     } else if (version === 'v0.1.0' || version === 'v0.2.0') {
       writeContract({
+        chainId: CHAIN_ID,
         address: escrowAddress as Address,
         abi: legacyRugPullAbi,
         functionName: 'rug_pull',
@@ -50,6 +61,7 @@ export default function RevokeButton({
     } else {
       // The zero-argument Vyper overload uses block.timestamp and msg.sender.
       writeContract({
+        chainId: CHAIN_ID,
         address: escrowAddress as Address,
         abi: legacyRevokeAbi,
         functionName: 'revoke',
@@ -75,6 +87,25 @@ export default function RevokeButton({
         >
           View tx
         </a>
+      </div>
+    );
+  }
+
+  if (!isMainnet) {
+    return (
+      <div>
+        <Button
+          variant="secondary"
+          onClick={switchToMainnet}
+          loading={isSwitching}
+        >
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum'}
+        </Button>
+        {switchError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </p>
+        )}
       </div>
     );
   }

@@ -2,7 +2,7 @@ import { getAddress } from 'viem';
 import deploymentConfig from '../../config/deployments.json';
 
 // Chain configuration
-export const CHAIN_ID = deploymentConfig.chainId;
+export const CHAIN_ID = deploymentConfig.chainId as 1;
 
 // Contract addresses
 export const FACTORY_ADDRESS = getAddress(deploymentConfig.activeFactory);

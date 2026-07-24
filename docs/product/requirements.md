@@ -69,12 +69,24 @@ escrows on Ethereum mainnet.
 ### Behavior
 
 - Wallet connection is required.
+- Wallet writes are gated to Ethereum mainnet. A connected wallet on another
+  chain is offered a network switch before any action is enabled.
 - The page reads token/vault metadata, balance, and allowance.
-- ERC-4626 funding uses the factory's rounded-up share quote for the requested
-  asset-denominated principal.
-- ERC20 or vault-share approval happens before deployment when allowance is insufficient.
+- ERC-4626 funding shows the factory's current rounded-up share quote separately
+  from a user-selected maximum share spend. The current quote initializes an
+  untouched maximum, but the user may raise the cap for delayed execution.
+- ERC20 or vault-share approval happens before deployment when allowance is
+  insufficient. Approval is limited to the token amount or selected share
+  maximum rather than an unlimited allowance.
+- The ERC-4626 quote is refreshed and every deployment is simulated before the
+  wallet request is opened.
 - The revoker is the connected wallet; there is no separate revoker input in the current UI.
-- The app decodes the versioned creation event from the receipt and routes to the new escrow.
+- The yield recipient follows connected-account changes until the user manually
+  edits that immutable destination.
+- The app accepts a creation event only from the configured factory, verifies
+  every submitted configuration field, and then routes to the emitted escrow.
+- All write requests and transaction-receipt waits are explicitly bound to
+  Ethereum mainnet.
 
 ## Data Model
 

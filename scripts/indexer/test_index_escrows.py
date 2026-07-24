@@ -32,6 +32,7 @@ class LegacyAdminIndexerTest(unittest.TestCase):
 
     def test_creation_event_normalization(self):
         event = {
+            "address": V02_FACTORY["address"],
             "args": {
                 "escrow": "0x1111111111111111111111111111111111111111",
                 "token": "0x2222222222222222222222222222222222222222",
@@ -65,6 +66,7 @@ class V04IndexerTest(unittest.TestCase):
 
     def test_token_event_normalization(self):
         event = {
+            "address": FACTORY["address"],
             "args": {
                 "escrow": "0x1111111111111111111111111111111111111111",
                 "token": "0x2222222222222222222222222222222222222222",
@@ -90,6 +92,7 @@ class V04IndexerTest(unittest.TestCase):
 
     def test_erc4626_event_normalization(self):
         event = {
+            "address": FACTORY["address"],
             "args": {
                 "escrow": "0x1111111111111111111111111111111111111111",
                 "vault": "0x2222222222222222222222222222222222222222",
@@ -118,6 +121,28 @@ class V04IndexerTest(unittest.TestCase):
         self.assertEqual(escrow["fundedShares"], "90")
         self.assertEqual(escrow["amount"], "100")
         self.assertFalse(escrow["openClaim"])
+
+    def test_rejects_event_from_another_factory(self):
+        event = {
+            "address": "0x9999999999999999999999999999999999999999",
+            "args": {
+                "escrow": "0x1111111111111111111111111111111111111111",
+                "token": "0x2222222222222222222222222222222222222222",
+                "recipient": "0x3333333333333333333333333333333333333333",
+                "funder": "0x4444444444444444444444444444444444444444",
+                "revoker": "0x5555555555555555555555555555555555555555",
+                "amount": 100,
+                "vesting_start": 1_000,
+                "vesting_duration": 2_000,
+                "cliff_length": 100,
+                "permissionless_claims": True,
+            },
+            "blockNumber": 25_602_400,
+            "transactionHash": TX_HASH,
+        }
+
+        with self.assertRaisesRegex(ValueError, "does not match configured factory"):
+            index_escrows.v04_token_event_to_escrow(event, FACTORY)
 
 
 if __name__ == "__main__":

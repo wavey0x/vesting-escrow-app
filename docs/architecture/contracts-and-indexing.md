@@ -56,14 +56,18 @@ separate v0.3 development line. It is not the source for the active factory.
 
 This path accepts an exact `principal_assets` amount, checks the execution-time
 rounded-up share quote against `max_funded_shares`, and records a fixed
-`yield_recipient`. The UI obtains the cap from
-`preview_erc4626_funding(vault, principal_assets)` and approves the factory for
-vault shares.
+`yield_recipient`. The UI displays
+`preview_erc4626_funding(vault, principal_assets)` as the current quote and
+maintains a separate user-selected maximum. It approves only that maximum,
+refreshes the quote, and simulates the exact deployment before submission. The
+factory still pulls only the execution-time quote.
 
 The indexer decodes both `TokenVestingEscrowCreated` and
 `ERC4626VestingEscrowCreated`. ERC-4626 records store the underlying
 `asset_token` as `token`, retain `vault` separately, and keep amounts
-denominated in principal assets.
+denominated in principal assets. Both receipt handling and indexing reject
+creation events whose emitter is not the configured factory; the create flow
+also checks the emitted configuration against the exact simulated request.
 
 ## Versioned escrow APIs
 
@@ -154,3 +158,5 @@ The indexer stores:
 - creates a Python virtualenv
 - refreshes `public/data/*.json`
 - commits updated index files back to the repo
+
+Frontend transaction-safety regressions run with `npm run test:frontend`.

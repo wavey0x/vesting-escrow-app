@@ -39,6 +39,8 @@ import {
   v04Erc4626ClaimAbi,
 } from '../lib/contracts';
 import { IndexedEscrow } from '../lib/types';
+import { CHAIN_ID } from '../lib/constants';
+import { useMainnetWrite } from '../hooks/useMainnetWrite';
 
 function formatDaysUntil(timestamp: number, now: number): string {
   const targetDate = new Date(timestamp * 1000);
@@ -496,7 +498,16 @@ function ClaimableCard({
   onSuccess?: () => void;
 }) {
   const { data: hash, isPending, writeContract, error, reset } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+    chainId: CHAIN_ID,
+  });
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
   const [showSuccess, setShowSuccess] = useState(false);
   const handledSuccessHash = useRef<string>();
   const onSuccessRef = useRef(onSuccess);
@@ -504,6 +515,7 @@ function ClaimableCard({
   const handleClaim = () => {
     const claimConfig = getClaimConfig(escrow);
     writeContract({
+      chainId: CHAIN_ID,
       address: escrow.address as ViemAddress,
       abi: claimConfig.abi,
       functionName: claimConfig.functionName,
@@ -536,7 +548,16 @@ function ClaimableCard({
 
   const isTxLoading = isPending || isConfirming;
   const hasClaimableAmount = amount > 0n;
-  const canClick = isClaimable && hasClaimableAmount && !isTxLoading && !showSuccess;
+  const needsNetworkSwitch = isClaimable
+    && hasClaimableAmount
+    && !isMainnet
+    && !isTxLoading
+    && !showSuccess;
+  const canClick = isClaimable
+    && hasClaimableAmount
+    && isMainnet
+    && !isTxLoading
+    && !showSuccess;
 
   // Render the card content (same structure for all states)
   const renderCardContent = () => (
@@ -558,7 +579,7 @@ function ClaimableCard({
   );
 
   // Determine card styling based on state
-  const isActive = canClick || isTxLoading || showSuccess;
+  const isActive = canClick || needsNetworkSwitch || isTxLoading || showSuccess;
   const cardClasses = `relative min-w-0 p-4 border rounded-lg ${
     isActive
       ? 'border-primary' + (isTxLoading ? ' bg-divider-subtle' : '')
@@ -590,6 +611,26 @@ function ClaimableCard({
           {isPending ? 'Confirm in wallet...' : 'Claiming...'}
         </div>
       </div>
+    );
+  }
+
+  if (needsNetworkSwitch) {
+    return (
+      <button
+        onClick={switchToMainnet}
+        disabled={isSwitching}
+        className={`${cardClasses} hover:bg-claimable/10 transition-colors text-left w-full`}
+      >
+        {renderCardContent()}
+        <div className="mt-2 text-xs text-primary">
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum to claim'}
+        </div>
+        {switchError && (
+          <div className="mt-1 text-xs text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </div>
+        )}
+      </button>
     );
   }
 
@@ -639,7 +680,16 @@ function YieldClaimButton({
   onSuccess?: () => void;
 }) {
   const { data: hash, isPending, writeContract, error, reset } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+    chainId: CHAIN_ID,
+  });
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
   const handledSuccessHash = useRef<string>();
 
   useEffect(() => {
@@ -664,6 +714,25 @@ function YieldClaimButton({
     );
   }
 
+  if (!isMainnet) {
+    return (
+      <div>
+        <Button
+          variant="secondary"
+          loading={isSwitching}
+          onClick={switchToMainnet}
+        >
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum'}
+        </Button>
+        {switchError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div>
       <Button
@@ -672,6 +741,7 @@ function YieldClaimButton({
         onClick={() => {
           reset();
           writeContract({
+            chainId: CHAIN_ID,
             address: escrowAddress as ViemAddress,
             abi: v04Erc4626ClaimAbi,
             functionName: 'claim_yield',
