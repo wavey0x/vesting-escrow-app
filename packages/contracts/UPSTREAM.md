@@ -15,7 +15,7 @@ not a nested Git repository or a Git submodule.
 ## Local divergence
 
 The upstream release is the baseline, but the local contract source now
-intentionally ports four changes from the verified Curve deployment at factory
+intentionally ports four changes from the verified LlamaPay v2 deployment at factory
 `0xcf61782465Ff973638143d6492B51A85986aB347` and target
 `0x9dd5cF263327e2D6a608da8c30368Eb27514bAD2`:
 
@@ -24,8 +24,8 @@ intentionally ports four changes from the verified Curve deployment at factory
 - clear the escrow owner before the external transfer in `revoke`;
 - assert vested-token solvency after `collect_dust`.
 
-Compiled with Vyper 0.3.10 and the Curve constructor values, the local factory
-and target runtime bytecode hashes exactly match those deployed Curve
+Compiled with Vyper 0.3.10 and the LlamaPay v2 constructor values, the local factory
+and target runtime bytecode hashes exactly match those deployed LlamaPay v2
 contracts. These changes are unreleased and must not be overwritten during an
 upstream sync.
 

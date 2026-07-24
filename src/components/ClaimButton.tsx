@@ -1,6 +1,7 @@
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { Address, maxUint256 } from 'viem';
-import { getEtherscanTxUrl } from '../lib/constants';
+import { CHAIN_ID, getEtherscanTxUrl } from '../lib/constants';
+import { useMainnetWrite } from '../hooks/useMainnetWrite';
 
 const escrowAbi = [
   {
@@ -31,14 +32,22 @@ export default function ClaimButton({
   compact = false,
 }: ClaimButtonProps) {
   const { data: hash, isPending, writeContract, error } = useWriteContract();
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
+    chainId: CHAIN_ID,
   });
 
   const handleClaim = () => {
     // Claim all available to the recipient (max uint256 = claim all)
     writeContract({
+      chainId: CHAIN_ID,
       address: escrowAddress as Address,
       abi: escrowAbi,
       functionName: 'claim',
@@ -81,6 +90,38 @@ export default function ClaimButton({
         >
           View tx
         </a>
+      </div>
+    );
+  }
+
+  if (!isMainnet) {
+    if (compact) {
+      return (
+        <button
+          onClick={switchToMainnet}
+          disabled={isSwitching}
+          className="px-2 py-1 text-xs font-medium rounded border border-primary text-primary hover:bg-divider-subtle"
+          title="Switch to Ethereum mainnet"
+        >
+          {isSwitching ? '...' : 'Switch'}
+        </button>
+      );
+    }
+
+    return (
+      <div>
+        <button
+          onClick={switchToMainnet}
+          disabled={isSwitching}
+          className="px-6 py-2 bg-background text-primary font-medium rounded border border-primary transition-colors hover:bg-divider-subtle"
+        >
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum'}
+        </button>
+        {switchError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </p>
+        )}
       </div>
     );
   }

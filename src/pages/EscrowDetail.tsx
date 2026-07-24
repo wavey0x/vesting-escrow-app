@@ -31,19 +31,16 @@ import {
   isOwner,
   isRecipient,
 } from '../lib/escrow';
-
-const escrowAbi = [
-  {
-    name: 'claim',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'beneficiary', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'uint256' }],
-  },
-] as const;
+import {
+  getClaimConfig,
+  getEscrowKind,
+  getEscrowVersion,
+  isRevoked,
+  v04Erc4626ClaimAbi,
+} from '../lib/contracts';
+import { IndexedEscrow } from '../lib/types';
+import { CHAIN_ID } from '../lib/constants';
+import { useMainnetWrite } from '../hooks/useMainnetWrite';
 
 function formatDaysUntil(timestamp: number, now: number): string {
   const targetDate = new Date(timestamp * 1000);
@@ -90,7 +87,7 @@ export default function EscrowDetail() {
   };
 
   const { escrow: indexedEscrow, isLoading: loadingIndex } = useEscrowByAddress(escrowAddress);
-  const { data: liveData, isLoading: loadingLive, refetch } = useLiveEscrowData(escrowAddress);
+  const { data: liveData, isLoading: loadingLive, refetch } = useLiveEscrowData(indexedEscrow);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
@@ -153,8 +150,13 @@ export default function EscrowDetail() {
   }
 
   const escrow = mergeEscrowData(indexedEscrow, liveData);
+  const version = getEscrowVersion(escrow);
+  const kind = getEscrowKind(escrow);
   const amounts = getAmountsBreakdown(escrow);
   const decimals = tokenMetadata?.decimals || 18;
+  const vaultMetadata = escrow.vault
+    ? tokensIndex?.tokens[escrow.vault.toLowerCase()]
+    : undefined;
 
   const formatValue = (amount: bigint) => {
     if (!tokenPrice) return null;
@@ -165,10 +167,13 @@ export default function EscrowDetail() {
   const showClaim = canClaim(escrow, userAddress);
   const showRevoke = canRevoke(escrow, userAddress);
   const showDisown = canDisown(escrow, userAddress);
+  const showYieldClaim = kind === 'erc4626'
+    && !!userAddress
+    && (liveData?.claimableYieldShares ?? 0n) > 0n;
   const userIsOwner = isOwner(escrow, userAddress);
   const userIsRecipient = isRecipient(escrow, userAddress);
   const cliffEnd = escrow.vestingStart + escrow.cliffLength;
-  const revokedOn = liveData && liveData.disabledAt < liveData.endTime
+  const revokedOn = liveData && isRevoked(escrow, liveData)
     ? Number(liveData.disabledAt)
     : null;
   const cliffLabel = showCliffDuration ? 'Cliff Duration' : 'Cliff Date';
@@ -239,7 +244,7 @@ export default function EscrowDetail() {
                     ) : (
                       <>
                         <h1 className="truncate text-2xl font-bold text-primary">
-                          {tokenMetadata?.symbol || 'Unknown Token'} Escrow
+                          {tokenMetadata?.symbol || 'Unknown Token'} {kind === 'erc4626' ? 'ERC-4626 ' : ''}Escrow
                         </h1>
                         <button
                           onClick={() => {
@@ -316,7 +321,7 @@ export default function EscrowDetail() {
           value={formatValue(amounts.claimable)}
           isLoading={loadingLive}
           canClaim={showClaim}
-          escrowAddress={escrow.address}
+          escrow={escrow}
           recipient={escrow.recipient}
           onSuccess={() => refetch()}
         />
@@ -336,7 +341,7 @@ export default function EscrowDetail() {
       </div>
 
       {/* Actions */}
-      {(showRevoke || showDisown) && (
+      {(showRevoke || showDisown || showYieldClaim) && (
         <div className="w-full min-w-0 p-6 border border-divider-strong rounded-lg">
           <h2 className="text-lg font-semibold text-primary mb-4">Actions</h2>
           <div className="flex flex-wrap gap-4">
@@ -346,14 +351,26 @@ export default function EscrowDetail() {
                 locked={amounts.locked}
                 decimals={decimals}
                 symbol={tokenMetadata?.symbol}
+                version={version}
+                receiver={userAddress || escrow.recipient}
                 onSuccess={() => refetch()}
               />
             )}
             {showDisown && (
               <DisownButton
                 escrowAddress={escrow.address}
+                version={version}
                 onSuccess={() => refetch()}
               />
+            )}
+            {showYieldClaim && liveData?.claimableYieldShares !== undefined && (
+                <YieldClaimButton
+                  escrowAddress={escrow.address}
+                  shares={liveData.claimableYieldShares}
+                  decimals={vaultMetadata?.decimals || 18}
+                  symbol={vaultMetadata?.symbol}
+                  onSuccess={() => refetch()}
+                />
             )}
           </div>
         </div>
@@ -388,6 +405,16 @@ export default function EscrowDetail() {
               <CopyAddressIconButton address={escrow.token} label="Copy token address" />
             </div>
           </DetailRow>
+          {escrow.vault && (
+            <DetailRow label="Vault">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="font-medium text-primary">
+                  {vaultMetadata?.symbol || 'ERC-4626'}
+                </span>
+                <AddressDisplay address={escrow.vault} />
+              </div>
+            </DetailRow>
+          )}
           <DetailRow label="Recipient">
             <div className="flex items-center gap-2">
               <AddressDisplay address={escrow.recipient} />
@@ -400,13 +427,24 @@ export default function EscrowDetail() {
             <AddressDisplay address={escrow.funder} />
           </DetailRow>
           {liveData && (
-            <DetailRow label="Owner">
+            <DetailRow label={
+              version === 'v0.4.0'
+                ? 'Revoker'
+                : version === 'v0.1.0' || version === 'v0.2.0'
+                ? 'Admin'
+                : 'Owner'
+            }>
               <div className="flex items-center gap-2">
                 <AddressDisplay address={liveData.owner} />
                 {userIsOwner && (
                   <span className="text-xs bg-divider-subtle px-2 py-0.5 rounded">You</span>
                 )}
               </div>
+            </DetailRow>
+          )}
+          {(liveData?.yieldRecipient || escrow.yieldRecipient) && (
+            <DetailRow label="Yield Recipient">
+              <AddressDisplay address={liveData?.yieldRecipient || escrow.yieldRecipient!} />
             </DetailRow>
           )}
           <DetailRow label="Duration">
@@ -428,8 +466,11 @@ export default function EscrowDetail() {
               {formatLocalIsoDate(revokedOn)}
             </DetailRow>
           )}
-          <DetailRow label="Open Claim">
-            {escrow.openClaim ? 'True' : 'False'}
+          <DetailRow label={version === 'v0.4.0' ? 'Permissionless Claims' : 'Open Claim'}>
+            {(liveData?.openClaim ?? escrow.openClaim) ? 'True' : 'False'}
+          </DetailRow>
+          <DetailRow label="Version">
+            {version}{kind === 'erc4626' ? ' / ERC-4626' : ''}
           </DetailRow>
         </div>
       </div>
@@ -443,7 +484,7 @@ function ClaimableCard({
   value,
   isLoading,
   canClaim: isClaimable,
-  escrowAddress,
+  escrow,
   recipient,
   onSuccess,
 }: {
@@ -452,23 +493,34 @@ function ClaimableCard({
   value: string | null;
   isLoading?: boolean;
   canClaim: boolean;
-  escrowAddress: string;
+  escrow: IndexedEscrow;
   recipient: string;
   onSuccess?: () => void;
 }) {
   const { data: hash, isPending, writeContract, error, reset } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+    chainId: CHAIN_ID,
+  });
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
   const [showSuccess, setShowSuccess] = useState(false);
   const handledSuccessHash = useRef<string>();
   const onSuccessRef = useRef(onSuccess);
 
   const handleClaim = () => {
+    const claimConfig = getClaimConfig(escrow);
     writeContract({
-      address: escrowAddress as ViemAddress,
-      abi: escrowAbi,
-      functionName: 'claim',
+      chainId: CHAIN_ID,
+      address: escrow.address as ViemAddress,
+      abi: claimConfig.abi,
+      functionName: claimConfig.functionName,
       args: [recipient as ViemAddress, maxUint256],
-    });
+    } as any);
   };
 
   useEffect(() => {
@@ -496,7 +548,16 @@ function ClaimableCard({
 
   const isTxLoading = isPending || isConfirming;
   const hasClaimableAmount = amount > 0n;
-  const canClick = isClaimable && hasClaimableAmount && !isTxLoading && !showSuccess;
+  const needsNetworkSwitch = isClaimable
+    && hasClaimableAmount
+    && !isMainnet
+    && !isTxLoading
+    && !showSuccess;
+  const canClick = isClaimable
+    && hasClaimableAmount
+    && isMainnet
+    && !isTxLoading
+    && !showSuccess;
 
   // Render the card content (same structure for all states)
   const renderCardContent = () => (
@@ -518,7 +579,7 @@ function ClaimableCard({
   );
 
   // Determine card styling based on state
-  const isActive = canClick || isTxLoading || showSuccess;
+  const isActive = canClick || needsNetworkSwitch || isTxLoading || showSuccess;
   const cardClasses = `relative min-w-0 p-4 border rounded-lg ${
     isActive
       ? 'border-primary' + (isTxLoading ? ' bg-divider-subtle' : '')
@@ -553,6 +614,26 @@ function ClaimableCard({
     );
   }
 
+  if (needsNetworkSwitch) {
+    return (
+      <button
+        onClick={switchToMainnet}
+        disabled={isSwitching}
+        className={`${cardClasses} hover:bg-claimable/10 transition-colors text-left w-full`}
+      >
+        {renderCardContent()}
+        <div className="mt-2 text-xs text-primary">
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum to claim'}
+        </div>
+        {switchError && (
+          <div className="mt-1 text-xs text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </div>
+        )}
+      </button>
+    );
+  }
+
   // Claimable state - clickable card
   if (canClick) {
     return (
@@ -581,6 +662,99 @@ function ClaimableCard({
   return (
     <div className={cardClasses}>
       {renderCardContent()}
+    </div>
+  );
+}
+
+function YieldClaimButton({
+  escrowAddress,
+  shares,
+  decimals,
+  symbol,
+  onSuccess,
+}: {
+  escrowAddress: string;
+  shares: bigint;
+  decimals: number;
+  symbol?: string;
+  onSuccess?: () => void;
+}) {
+  const { data: hash, isPending, writeContract, error, reset } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
+    hash,
+    chainId: CHAIN_ID,
+  });
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
+  const handledSuccessHash = useRef<string>();
+
+  useEffect(() => {
+    if (!isSuccess || !hash || handledSuccessHash.current === hash) return;
+    handledSuccessHash.current = hash;
+    onSuccess?.();
+  }, [hash, isSuccess, onSuccess]);
+
+  if (isSuccess && hash) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-primary">Yield claimed!</span>
+        <a
+          href={`https://etherscan.io/tx/${hash}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-secondary hover:text-primary"
+        >
+          View tx
+        </a>
+      </div>
+    );
+  }
+
+  if (!isMainnet) {
+    return (
+      <div>
+        <Button
+          variant="secondary"
+          loading={isSwitching}
+          onClick={switchToMainnet}
+        >
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum'}
+        </Button>
+        {switchError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <Button
+        variant="secondary"
+        loading={isPending || isConfirming}
+        onClick={() => {
+          reset();
+          writeContract({
+            chainId: CHAIN_ID,
+            address: escrowAddress as ViemAddress,
+            abi: v04Erc4626ClaimAbi,
+            functionName: 'claim_yield',
+          });
+        }}
+      >
+        Claim <TokenAmount value={shares} decimals={decimals} /> {symbol || 'vault shares'} Yield
+      </Button>
+      {error && (
+        <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+          {error.message.includes('User rejected') ? 'Transaction rejected' : 'Failed to claim yield'}
+        </p>
+      )}
     </div>
   );
 }

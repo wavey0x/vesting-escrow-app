@@ -1,28 +1,21 @@
 import { useState } from 'react';
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { Address, zeroAddress } from 'viem';
+import { Address } from 'viem';
 import Button from './Button';
 import { formatTokenAmount } from '../lib/format';
 import { getEtherscanTxUrl } from '../lib/constants';
-
-const escrowAbi = [
-  {
-    name: 'revoke',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'beneficiary', type: 'address' },
-      { name: 'ts', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-] as const;
+import { legacyRevokeAbi, legacyRugPullAbi, v04RevokeAbi } from '../lib/contracts';
+import { EscrowVersion } from '../lib/types';
+import { CHAIN_ID } from '../lib/constants';
+import { useMainnetWrite } from '../hooks/useMainnetWrite';
 
 interface RevokeButtonProps {
   escrowAddress: string;
   locked: bigint;
   decimals: number;
   symbol?: string;
+  version: EscrowVersion;
+  receiver: string;
   onSuccess?: () => void;
 }
 
@@ -31,23 +24,49 @@ export default function RevokeButton({
   locked,
   decimals,
   symbol,
+  version,
+  receiver,
   onSuccess,
 }: RevokeButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const { data: hash, isPending, writeContract, error } = useWriteContract();
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
+    chainId: CHAIN_ID,
   });
 
   const handleRevoke = () => {
-    // Revoke immediately (ts = 0) and send to self (beneficiary = zero to use msg.sender)
-    writeContract({
-      address: escrowAddress as Address,
-      abi: escrowAbi,
-      functionName: 'revoke',
-      args: [zeroAddress, 0n],
-    });
+    if (version === 'v0.4.0') {
+      writeContract({
+        chainId: CHAIN_ID,
+        address: escrowAddress as Address,
+        abi: v04RevokeAbi,
+        functionName: 'revoke',
+        args: [receiver as Address],
+      });
+    } else if (version === 'v0.1.0' || version === 'v0.2.0') {
+      writeContract({
+        chainId: CHAIN_ID,
+        address: escrowAddress as Address,
+        abi: legacyRugPullAbi,
+        functionName: 'rug_pull',
+      });
+    } else {
+      // The zero-argument Vyper overload uses block.timestamp and msg.sender.
+      writeContract({
+        chainId: CHAIN_ID,
+        address: escrowAddress as Address,
+        abi: legacyRevokeAbi,
+        functionName: 'revoke',
+      });
+    }
     setShowConfirm(false);
   };
 
@@ -68,6 +87,25 @@ export default function RevokeButton({
         >
           View tx
         </a>
+      </div>
+    );
+  }
+
+  if (!isMainnet) {
+    return (
+      <div>
+        <Button
+          variant="secondary"
+          onClick={switchToMainnet}
+          loading={isSwitching}
+        >
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum'}
+        </Button>
+        {switchError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </p>
+        )}
       </div>
     );
   }

@@ -1,7 +1,13 @@
 # Vesting Escrow
 
 Monorepo for the [vesting escrow app](https://vest.wavey.info/), its Ethereum
-event indexer, and the Vyper contracts used to deploy vesting escrows.
+event indexer, and a historical Vyper contract development package.
+
+The app creates standard ERC-20 and ERC-4626 escrows through the released
+[`yearn/yearn-vesting-escrow` v0.4.0 factory](https://github.com/yearn/yearn-vesting-escrow/tree/v0.4.0)
+at `0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215`. It continues to index
+every Yearn mainnet factory from v0.1.0 onward, plus LlamaPay v2, so historical
+escrow links and searches remain available.
 
 ## Repository layout
 
@@ -9,7 +15,8 @@ event indexer, and the Vyper contracts used to deploy vesting escrows.
 | --- | --- |
 | `src/` | Vite/React frontend |
 | `scripts/indexer/` | Mainnet factory event indexer |
-| `packages/contracts/` | Vyper contracts, Ape project, deployment scripts, and tests |
+| `config/deployments.json` | Shared frontend/indexer factory configuration |
+| `packages/contracts/` | Historical v0.3-compatible Vyper development package |
 | `docs/` | Product, design, architecture, and rollout documentation |
 
 The contract package was imported from
@@ -24,6 +31,7 @@ npm install
 npm run dev
 npm run build
 npm run lint
+npm run test:frontend
 ```
 
 ## Indexer
@@ -34,13 +42,15 @@ MAINNET_RPC=https://... .venv/bin/python scripts/indexer/index_escrows.py
 ```
 
 `public/data/*.json` is generated output. Always refresh it with the indexer;
-do not edit it by hand.
+do not edit it by hand. Factory addresses, deployment blocks, versions, and
+event formats are defined once in `config/deployments.json`.
 
 ## Contracts
 
-The package retains Vyper 0.3.10 and uses a locked Ape 0.8/Foundry toolchain. Its
-local contract changes reproduce the hardened Curve fork currently indexed by
-the app while retaining the v0.3 consumer interface.
+The package retains Vyper 0.3.10 and uses a locked Ape 0.8/Foundry toolchain.
+Its local contract changes reproduce the hardened LlamaPay v2 deployment
+currently indexed by the app while retaining the v0.3 consumer interface. It is
+not the source of the active v0.4.0 frontend deployment target.
 
 ```sh
 ./packages/contracts/setup-python.sh

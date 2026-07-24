@@ -1,6 +1,7 @@
 # Product Requirements
 
-This app lets users inspect, track, and create Yearn/Curve vesting escrows on Ethereum mainnet.
+This app lets users inspect, track, and create Yearn and LlamaPay vesting
+escrows on Ethereum mainnet.
 
 ## Routes
 
@@ -46,30 +47,46 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 
 | Action | Condition |
 | --- | --- |
-| `Claim` | User is recipient or `open_claim` is enabled and claimable amount is non-zero |
-| `Revoke` | User is current owner, escrow has locked tokens, and vesting has not ended |
-| `Disown` | User is current owner and owner is not the zero address |
+| `Claim` | User is recipient, or a version with permissionless claims has that setting enabled, and claimable amount is non-zero |
+| `Revoke` / `Rug Pull` | User is the current admin/owner/revoker, escrow has locked principal, and vesting has not ended |
+| `Disown` / `Renounce Ownership` / `Renounce Revocation` | User holds the corresponding authority; unsafe v0.1.0 renunciation is never offered |
+| `Claim Yield` | A v0.4 ERC-4626 escrow has claimable yield shares |
 
 ## Create Flow
 
 ### Inputs
 
-- Token address
+- Escrow type: standard ERC-20 or ERC-4626
+- Token or vault address
 - Recipient address
-- Amount
+- Token amount or asset-denominated ERC-4626 principal
+- ERC-4626 yield recipient
 - Vesting duration
 - Optional cliff
 - Start now or explicit start date
 - `open claim` toggle
-- `support Vyper` toggle
 
 ### Behavior
 
 - Wallet connection is required.
-- The page reads token symbol, decimals, balance, and allowance.
-- ERC20 approval happens before deployment when allowance is insufficient.
-- The owner is the connected wallet; there is no separate owner input in the current UI.
-- The app parses the `VestingEscrowCreated` event from the receipt and routes to the new escrow.
+- Wallet writes are gated to Ethereum mainnet. A connected wallet on another
+  chain is offered a network switch before any action is enabled.
+- The page reads token/vault metadata, balance, and allowance.
+- ERC-4626 funding shows the factory's current rounded-up share quote separately
+  from a user-selected maximum share spend. The current quote initializes an
+  untouched maximum, but the user may raise the cap for delayed execution.
+- ERC20 or vault-share approval happens before deployment when allowance is
+  insufficient. Approval is limited to the token amount or selected share
+  maximum rather than an unlimited allowance.
+- The ERC-4626 quote is refreshed and every deployment is simulated before the
+  wallet request is opened.
+- The revoker is the connected wallet; there is no separate revoker input in the current UI.
+- The yield recipient follows connected-account changes until the user manually
+  edits that immutable destination.
+- The app accepts a creation event only from the configured factory, verifies
+  every submitted configuration field, and then routes to the emitted escrow.
+- All write requests and transaction-receipt waits are explicitly bound to
+  Ethereum mainnet.
 
 ## Data Model
 
@@ -86,12 +103,13 @@ The detail and list views read live escrow state on demand:
 - `locked()`
 - `total_claimed`
 - `total_locked`
-- `owner`
+- `admin`, `owner`, or `revoker`
 - `disabled_at`
 - `end_time`
 - `start_time`
 - `cliff_length`
-- `open_claim`
+- `open_claim` or `permissionless_claims`
+- ERC-4626 principal, yield-share, vault, and yield-recipient state
 
 ### External Data
 

@@ -3,39 +3,66 @@ import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { Address } from 'viem';
 import Button from './Button';
 import { getEtherscanTxUrl } from '../lib/constants';
-
-const escrowAbi = [
-  {
-    name: 'disown',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [],
-    outputs: [],
-  },
-] as const;
+import {
+  legacyDisownAbi,
+  legacyRenounceOwnershipAbi,
+  v04RenounceAbi,
+} from '../lib/contracts';
+import { EscrowVersion } from '../lib/types';
+import { CHAIN_ID } from '../lib/constants';
+import { useMainnetWrite } from '../hooks/useMainnetWrite';
 
 interface DisownButtonProps {
   escrowAddress: string;
+  version: EscrowVersion;
   onSuccess?: () => void;
 }
 
 export default function DisownButton({
   escrowAddress,
+  version,
   onSuccess,
 }: DisownButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const { data: hash, isPending, writeContract, error } = useWriteContract();
+  const {
+    isMainnet,
+    isSwitching,
+    switchError,
+    switchToMainnet,
+  } = useMainnetWrite();
 
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
     hash,
+    chainId: CHAIN_ID,
   });
 
   const handleDisown = () => {
-    writeContract({
-      address: escrowAddress as Address,
-      abi: escrowAbi,
-      functionName: 'disown',
-    });
+    if (version === 'v0.4.0') {
+      writeContract({
+        chainId: CHAIN_ID,
+        address: escrowAddress as Address,
+        abi: v04RenounceAbi,
+        functionName: 'renounce_revocation',
+      });
+    } else if (version === 'v0.2.0') {
+      writeContract({
+        chainId: CHAIN_ID,
+        address: escrowAddress as Address,
+        abi: legacyRenounceOwnershipAbi,
+        functionName: 'renounce_ownership',
+      });
+    } else if (version === 'v0.3.0' || version === 'llamapay-v2') {
+      writeContract({
+        chainId: CHAIN_ID,
+        address: escrowAddress as Address,
+        abi: legacyDisownAbi,
+        functionName: 'disown',
+      });
+    } else {
+      // v0.1.0 renunciation is intentionally unsupported.
+      return;
+    }
     setShowConfirm(false);
   };
 
@@ -60,11 +87,30 @@ export default function DisownButton({
     );
   }
 
+  if (!isMainnet) {
+    return (
+      <div>
+        <Button
+          variant="secondary"
+          onClick={switchToMainnet}
+          loading={isSwitching}
+        >
+          {isSwitching ? 'Switching...' : 'Switch to Ethereum'}
+        </Button>
+        {switchError && (
+          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+            Failed to switch to Ethereum
+          </p>
+        )}
+      </div>
+    );
+  }
+
   if (showConfirm) {
     return (
       <div className="flex flex-col gap-2">
         <p className="text-sm text-secondary">
-          This will permanently give up ownership of this escrow. You will no
+          This will permanently give up revocation authority over this escrow. You will no
           longer be able to revoke tokens. This action cannot be undone.
         </p>
         <div className="flex gap-2">
@@ -76,8 +122,10 @@ export default function DisownButton({
             {isPending
               ? 'Confirm in wallet...'
               : isConfirming
-              ? 'Disowning...'
-              : 'Confirm Disown'}
+              ? 'Renouncing...'
+              : `Confirm ${version === 'v0.3.0' || version === 'llamapay-v2'
+                ? 'Disown'
+                : 'Renounce'}`}
           </Button>
           <Button variant="ghost" onClick={() => setShowConfirm(false)}>
             Cancel
@@ -90,7 +138,11 @@ export default function DisownButton({
   return (
     <div>
       <Button variant="secondary" onClick={() => setShowConfirm(true)}>
-        Disown
+        {version === 'v0.4.0'
+          ? 'Renounce Revocation'
+          : version === 'v0.2.0'
+          ? 'Renounce Ownership'
+          : 'Disown'}
       </Button>
       {error && (
         <p className="mt-2 text-sm text-red-600 dark:text-red-400">

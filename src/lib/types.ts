@@ -1,10 +1,24 @@
+export type EscrowVersion =
+  | 'v0.1.0'
+  | 'v0.2.0'
+  | 'v0.3.0'
+  | 'llamapay-v2'
+  | 'v0.4.0';
+export type EscrowKind = 'token' | 'erc4626';
+
 // Escrow data from index
 export interface IndexedEscrow {
   address: string;
   factory?: string;
+  version?: EscrowVersion;
+  kind?: EscrowKind;
   funder: string;
   token: string;
+  vault?: string;
   recipient: string;
+  revoker?: string;
+  yieldRecipient?: string;
+  fundedShares?: string;
   amount: string;
   vestingStart: number;
   vestingDuration: number;
@@ -34,6 +48,8 @@ export interface LiveEscrowData {
   startTime: bigint;
   cliffLength: bigint;
   openClaim: boolean;
+  claimableYieldShares?: bigint;
+  yieldRecipient?: string;
 }
 
 // Combined escrow data

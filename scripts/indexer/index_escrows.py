@@ -2,8 +2,8 @@
 """
 Vesting Escrow Indexer
 
-Scans VestingEscrowFactory contracts for VestingEscrowCreated events
-and builds a JSON index of all escrows.
+Scans every supported VestingEscrowFactory creation-event version and builds a
+JSON index of all escrows.
 
 Usage:
     MAINNET_RPC=https://... python scripts/indexer/index_escrows.py [--refresh-logos]
@@ -20,13 +20,19 @@ from pathlib import Path
 import requests
 from web3 import Web3
 
-# Constants
-FACTORIES = [
-    {"address": "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF", "deployBlock": 18_291_969},
-    {"address": "0xcf61782465Ff973638143d6492B51A85986aB347", "deployBlock": 19_739_664},
-]
+# Paths and deployment configuration
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_DIR = SCRIPT_DIR.parent.parent
+DATA_DIR = PROJECT_DIR / "public" / "data"
+ABI_DIR = SCRIPT_DIR / "abi"
+DEPLOYMENTS_FILE = PROJECT_DIR / "config" / "deployments.json"
+
+with open(DEPLOYMENTS_FILE) as deployments_file:
+    DEPLOYMENTS = json.load(deployments_file)
+
+FACTORIES = DEPLOYMENTS["factories"]
 CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", 100_000))
-CHAIN_ID = 1
+CHAIN_ID = DEPLOYMENTS["chainId"]
 
 PREFERRED_LOGO_DOMAIN = "smold"  # Substring matched against logoUrl to identify preferred source
 
@@ -89,19 +95,19 @@ def find_logo_url(token_address: str) -> tuple[str | None, str | None]:
             continue
     return None, None
 
-# Paths
-SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = SCRIPT_DIR.parent.parent
-DATA_DIR = PROJECT_DIR / "public" / "data"
-ABI_DIR = SCRIPT_DIR / "abi"
-
 ESCROWS_FILE = DATA_DIR / "escrows.json"
 TOKENS_FILE = DATA_DIR / "tokens.json"
 
 
-def load_factory_abi() -> list:
-    """Load the factory ABI from file."""
-    abi_path = ABI_DIR / "VestingEscrowFactory.json"
+def load_factory_abi(event_format: str) -> list:
+    """Load the ABI matching a factory's event version."""
+    filenames = {
+        "legacy-admin": "VestingEscrowFactoryLegacyAdmin.json",
+        "legacy": "VestingEscrowFactory.json",
+        "v0.4": "VestingEscrowFactoryV04.json",
+    }
+    filename = filenames[event_format]
+    abi_path = ABI_DIR / filename
     with open(abi_path) as f:
         return json.load(f)
 
@@ -143,8 +149,24 @@ def load_existing_data() -> dict:
         old_factory = data.pop("factory")
         old_last_block = data.pop("lastBlock", 0)
         data.pop("factoryDeployBlock", None)
+        old_factory_config = next(
+            (
+                factory
+                for factory in FACTORIES
+                if factory["address"].lower() == old_factory.lower()
+            ),
+            None,
+        )
+        old_deploy_block = (
+            old_factory_config["deployBlock"]
+            if old_factory_config
+            else 0
+        )
         data["factories"] = {
-            old_factory: {"deployBlock": FACTORIES[0]["deployBlock"], "lastBlock": old_last_block}
+            old_factory: {
+                "deployBlock": old_deploy_block,
+                "lastBlock": old_last_block,
+            }
         }
         # Tag existing escrows with the original factory
         for escrow in data["escrows"]:
@@ -158,6 +180,18 @@ def load_existing_data() -> dict:
                 "deployBlock": factory["deployBlock"],
                 "lastBlock": factory["deployBlock"] - 1,
             }
+
+    # Backfill versioned schema fields in indexes produced before multi-version
+    # live reads were introduced.
+    factories_by_address = {
+        factory["address"].lower(): factory
+        for factory in FACTORIES
+    }
+    for escrow in data["escrows"]:
+        factory = factories_by_address.get(escrow.get("factory", "").lower())
+        if factory:
+            escrow.setdefault("version", factory["version"])
+            escrow.setdefault("kind", "token")
 
     return data
 
@@ -174,12 +208,28 @@ def load_existing_tokens() -> dict:
         }
 
 
-def event_to_escrow(event, factory_address: str) -> dict:
-    """Convert a web3.py event object to our escrow format."""
+def validate_event_source(event, factory: dict) -> None:
+    """Reject a creation event unless it was emitted by the configured factory."""
+    event_address = event.get("address")
+    if (
+        not isinstance(event_address, str)
+        or event_address.lower() != factory["address"].lower()
+    ):
+        raise ValueError(
+            f"creation event source {event_address!r} does not match "
+            f"configured factory {factory['address']}"
+        )
+
+
+def legacy_event_to_escrow(event, factory: dict) -> dict:
+    """Convert a legacy VestingEscrowCreated event to the shared schema."""
+    validate_event_source(event, factory)
     args = event["args"]
     return {
         "address": args["escrow"],
-        "factory": factory_address,
+        "factory": factory["address"],
+        "version": factory["version"],
+        "kind": "token",
         "funder": args["funder"],
         "token": args["token"].lower(),  # lowercase for consistency
         "recipient": args["recipient"],
@@ -193,13 +243,101 @@ def event_to_escrow(event, factory_address: str) -> dict:
     }
 
 
-def fetch_events(contract, from_block: int, to_block: int, factory_address: str) -> list:
-    """Fetch VestingEscrowCreated events using contract interface."""
-    events = contract.events.VestingEscrowCreated.get_logs(
+def legacy_admin_event_to_escrow(event, factory: dict) -> dict:
+    """Convert a v0.1/v0.2 creation event to the shared schema."""
+    validate_event_source(event, factory)
+    args = event["args"]
+    return {
+        "address": args["escrow"],
+        "factory": factory["address"],
+        "version": factory["version"],
+        "kind": "token",
+        "funder": args["funder"],
+        "token": args["token"].lower(),
+        "recipient": args["recipient"],
+        "amount": str(args["amount"]),
+        "vestingStart": args["vesting_start"],
+        "vestingDuration": args["vesting_duration"],
+        "cliffLength": args["cliff_length"],
+        "openClaim": False,
+        "blockNumber": event["blockNumber"],
+        "txHash": event["transactionHash"].hex(),
+    }
+
+
+def v04_token_event_to_escrow(event, factory: dict) -> dict:
+    """Convert a v0.4 TokenVestingEscrowCreated event to the shared schema."""
+    validate_event_source(event, factory)
+    args = event["args"]
+    return {
+        "address": args["escrow"],
+        "factory": factory["address"],
+        "version": factory["version"],
+        "kind": "token",
+        "funder": args["funder"],
+        "token": args["token"].lower(),
+        "recipient": args["recipient"],
+        "revoker": args["revoker"],
+        "amount": str(args["amount"]),
+        "vestingStart": args["vesting_start"],
+        "vestingDuration": args["vesting_duration"],
+        "cliffLength": args["cliff_length"],
+        "openClaim": args["permissionless_claims"],
+        "blockNumber": event["blockNumber"],
+        "txHash": event["transactionHash"].hex(),
+    }
+
+
+def v04_erc4626_event_to_escrow(event, factory: dict) -> dict:
+    """Convert a v0.4 ERC4626VestingEscrowCreated event to the shared schema."""
+    validate_event_source(event, factory)
+    args = event["args"]
+    return {
+        "address": args["escrow"],
+        "factory": factory["address"],
+        "version": factory["version"],
+        "kind": "erc4626",
+        "funder": args["funder"],
+        "token": args["asset_token"].lower(),
+        "vault": args["vault"],
+        "recipient": args["recipient"],
+        "revoker": args["revoker"],
+        "yieldRecipient": args["yield_recipient"],
+        "fundedShares": str(args["funded_shares"]),
+        "amount": str(args["principal_assets"]),
+        "vestingStart": args["vesting_start"],
+        "vestingDuration": args["vesting_duration"],
+        "cliffLength": args["cliff_length"],
+        "openClaim": args["permissionless_claims"],
+        "blockNumber": event["blockNumber"],
+        "txHash": event["transactionHash"].hex(),
+    }
+
+
+def fetch_events(contract, from_block: int, to_block: int, factory: dict) -> list:
+    """Fetch creation events using the factory's versioned event ABI."""
+    if factory["eventFormat"] in ("legacy-admin", "legacy"):
+        events = contract.events.VestingEscrowCreated.get_logs(
+            from_block=from_block,
+            to_block=to_block,
+        )
+        if factory["eventFormat"] == "legacy-admin":
+            return [legacy_admin_event_to_escrow(event, factory) for event in events]
+        return [legacy_event_to_escrow(event, factory) for event in events]
+
+    token_events = contract.events.TokenVestingEscrowCreated.get_logs(
         from_block=from_block,
-        to_block=to_block
+        to_block=to_block,
     )
-    return [event_to_escrow(e, factory_address) for e in events]
+    erc4626_events = contract.events.ERC4626VestingEscrowCreated.get_logs(
+        from_block=from_block,
+        to_block=to_block,
+    )
+    events = [
+        *(v04_token_event_to_escrow(event, factory) for event in token_events),
+        *(v04_erc4626_event_to_escrow(event, factory) for event in erc4626_events),
+    ]
+    return sorted(events, key=lambda event: (event["blockNumber"], event["address"]))
 
 
 DEFAULT_TOKEN_METADATA = {
@@ -240,20 +378,21 @@ def fetch_token_metadata(w3: Web3, token_address: str) -> dict:
         return dict(DEFAULT_TOKEN_METADATA)
 
 
-def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_block: int, existing_addresses: set) -> set:
+def index_factory(w3: Web3, contract, data: dict, factory: dict, current_block: int, existing_addresses: set) -> set:
     """
     Index new escrows from a single factory.
     Returns set of new token addresses found.
     Updates existing_addresses in place as new escrows are added.
     """
+    factory_address = factory["address"]
     factory_meta = data["factories"][factory_address]
     start_block = factory_meta["lastBlock"] + 1
 
-    if start_block >= current_block:
+    if start_block > current_block:
         print("  No new blocks to scan")
         return set()
 
-    total_blocks = current_block - start_block
+    total_blocks = current_block - start_block + 1
     num_chunks = (total_blocks + CHUNK_SIZE - 1) // CHUNK_SIZE
 
     print(f"  Scanning blocks {start_block:,} to {current_block:,} ({total_blocks:,} blocks, {num_chunks} chunks)")
@@ -270,7 +409,7 @@ def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_
         retries = 3
         for attempt in range(retries):
             try:
-                events = fetch_events(contract, chunk_start, chunk_end, factory_address)
+                events = fetch_events(contract, chunk_start, chunk_end, factory)
                 break
             except Exception as e:
                 if attempt < retries - 1:
@@ -286,6 +425,8 @@ def index_factory(w3: Web3, contract, data: dict, factory_address: str, current_
                 new_escrows.append(escrow)
                 existing_addresses.add(escrow["address"])
                 new_tokens.add(escrow["token"])
+                if escrow.get("vault"):
+                    new_tokens.add(escrow["vault"].lower())
 
         print(f"found {len(events)} events")
 
@@ -378,7 +519,6 @@ def main():
 
     # Initialize
     w3 = get_web3()
-    abi = load_factory_abi()
     data = load_existing_data()
     tokens_data = load_existing_tokens()
 
@@ -395,8 +535,9 @@ def main():
     for factory in FACTORIES:
         addr = factory["address"]
         print(f"\nIndexing factory {addr}...")
+        abi = load_factory_abi(factory["eventFormat"])
         contract = w3.eth.contract(address=addr, abi=abi)
-        new_tokens = index_factory(w3, contract, data, addr, current_block, existing_addresses)
+        new_tokens = index_factory(w3, contract, data, factory, current_block, existing_addresses)
         all_new_tokens.update(new_tokens)
 
     data["lastIndexed"] = datetime.now(timezone.utc).isoformat()

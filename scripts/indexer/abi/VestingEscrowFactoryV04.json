@@ -1,0 +1,97 @@
+[
+  {
+    "name": "TokenVestingEscrowCreated",
+    "inputs": [
+      {"name": "escrow", "type": "address", "indexed": true},
+      {"name": "token", "type": "address", "indexed": true},
+      {"name": "recipient", "type": "address", "indexed": true},
+      {"name": "funder", "type": "address", "indexed": false},
+      {"name": "revoker", "type": "address", "indexed": false},
+      {"name": "amount", "type": "uint256", "indexed": false},
+      {"name": "vesting_start", "type": "uint256", "indexed": false},
+      {"name": "vesting_duration", "type": "uint256", "indexed": false},
+      {"name": "cliff_length", "type": "uint256", "indexed": false},
+      {"name": "permissionless_claims", "type": "bool", "indexed": false}
+    ],
+    "anonymous": false,
+    "type": "event"
+  },
+  {
+    "name": "ERC4626VestingEscrowCreated",
+    "inputs": [
+      {"name": "escrow", "type": "address", "indexed": true},
+      {"name": "vault", "type": "address", "indexed": true},
+      {"name": "recipient", "type": "address", "indexed": true},
+      {"name": "funder", "type": "address", "indexed": false},
+      {"name": "revoker", "type": "address", "indexed": false},
+      {"name": "yield_recipient", "type": "address", "indexed": false},
+      {"name": "asset_token", "type": "address", "indexed": false},
+      {"name": "funded_shares", "type": "uint256", "indexed": false},
+      {"name": "principal_assets", "type": "uint256", "indexed": false},
+      {"name": "vesting_start", "type": "uint256", "indexed": false},
+      {"name": "vesting_duration", "type": "uint256", "indexed": false},
+      {"name": "cliff_length", "type": "uint256", "indexed": false},
+      {"name": "permissionless_claims", "type": "bool", "indexed": false}
+    ],
+    "anonymous": false,
+    "type": "event"
+  },
+  {
+    "stateMutability": "view",
+    "type": "function",
+    "name": "preview_erc4626_funding",
+    "inputs": [
+      {"name": "vault", "type": "address"},
+      {"name": "principal_assets", "type": "uint256"}
+    ],
+    "outputs": [{"name": "", "type": "uint256"}]
+  },
+  {
+    "stateMutability": "nonpayable",
+    "type": "function",
+    "name": "deploy_vesting_contract",
+    "inputs": [
+      {"name": "token", "type": "address"},
+      {"name": "recipient", "type": "address"},
+      {"name": "amount", "type": "uint256"},
+      {"name": "vesting_duration", "type": "uint256"},
+      {"name": "vesting_start", "type": "uint256"},
+      {"name": "cliff_length", "type": "uint256"},
+      {"name": "permissionless_claims", "type": "bool"},
+      {"name": "revoker", "type": "address"}
+    ],
+    "outputs": [{"name": "", "type": "address"}]
+  },
+  {
+    "stateMutability": "nonpayable",
+    "type": "function",
+    "name": "deploy_erc4626_vesting",
+    "inputs": [
+      {"name": "vault", "type": "address"},
+      {"name": "recipient", "type": "address"},
+      {"name": "principal_assets", "type": "uint256"},
+      {"name": "max_funded_shares", "type": "uint256"},
+      {"name": "vesting_duration", "type": "uint256"},
+      {"name": "vesting_start", "type": "uint256"},
+      {"name": "cliff_length", "type": "uint256"},
+      {"name": "permissionless_claims", "type": "bool"},
+      {"name": "revoker", "type": "address"},
+      {"name": "yield_recipient", "type": "address"}
+    ],
+    "outputs": [{"name": "", "type": "address"}]
+  },
+  {
+    "stateMutability": "view",
+    "type": "function",
+    "name": "STANDARD_TARGET",
+    "inputs": [],
+    "outputs": [{"name": "", "type": "address"}]
+  },
+  {
+    "stateMutability": "view",
+    "type": "function",
+    "name": "ERC4626_TARGET",
+    "inputs": [],
+    "outputs": [{"name": "", "type": "address"}]
+  }
+]
