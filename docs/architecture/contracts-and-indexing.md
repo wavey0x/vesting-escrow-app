@@ -153,10 +153,15 @@ The indexer stores:
 
 `.github/workflows/index-escrows.yml`:
 
-- runs daily at `00:00 UTC`
-- supports manual dispatch
-- creates a Python virtualenv
+- runs hourly at minute `0`
+- retries existing token logos only on the `00:00 UTC` run
+- supports manual dispatch with an optional logo-refresh input
+- caches Python packages and uses the ephemeral runner environment directly
+- prevents overlapping runs and caps each run at 30 minutes
 - refreshes `public/data/*.json`
-- commits updated index files back to the repo
+- commits updated index files only when it finds a new escrow or token metadata
+  actually changes
 
 Frontend transaction-safety regressions run with `npm run test:frontend`.
+Indexer unit tests run in the `App` workflow whenever indexer or deployment
+inputs change, rather than on every scheduled production scan.

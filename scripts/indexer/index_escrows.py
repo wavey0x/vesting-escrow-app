@@ -461,18 +461,19 @@ def update_token_metadata(w3: Web3, tokens_data: dict, new_tokens: set, refresh_
             existing = tokens_data["tokens"][token_address]
             print(f"  {token_address} ({existing.get('symbol', '???')})...", end=" ", flush=True)
             logo_url, source_name = find_logo_url(token_address)
-            # Update to new schema
-            tokens_data["tokens"][token_address] = {
+            refreshed_metadata = {
                 "symbol": existing.get("symbol", DEFAULT_TOKEN_METADATA["symbol"]),
                 "name": existing.get("name", DEFAULT_TOKEN_METADATA["name"]),
                 "decimals": existing.get("decimals", DEFAULT_TOKEN_METADATA["decimals"]),
                 "logoUrl": logo_url,
             }
+            if refreshed_metadata != existing:
+                tokens_data["tokens"][token_address] = refreshed_metadata
+                updated = True
             if logo_url:
                 print(f"✓ ({source_name})")
             else:
                 print("✗ (no logo found)")
-        updated = True
 
     # Fetch metadata for new tokens
     tokens_to_fetch = [t for t in new_tokens if t not in tokens_data["tokens"]]
