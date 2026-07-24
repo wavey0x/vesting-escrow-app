@@ -1,26 +1,32 @@
 # Contract change and factory rollout plan
 
+> [!NOTE]
+> This plan governs future deployments from the legacy-compatible
+> `packages/contracts/` development line. The production frontend now targets
+> the separately released Yearn v0.4.0 factory; its versioned integration is
+> documented in [Contracts and Indexing](contracts-and-indexing.md).
+
 ## Current state
 
 The repository now contains all three parts of the system:
 
 | Component | Location | Role |
 | --- | --- | --- |
-| Web app | `src/` | Reads escrows and creates new ones through the active factory |
+| Web app | `src/` | Reads versioned escrows and creates v0.4 standard/ERC-4626 escrows |
 | Indexer | `scripts/indexer/` | Scans all supported factories and generates `public/data/*.json` |
 | Contracts | `packages/contracts/` | Vyper source, Ape config, tests, and deployment scripts |
 
 The contract package is the upstream `yearn/yearn-vesting-escrow` v0.3.0 tag at
 commit `d14eed16f5b131bc35c58df2b8b4a03427928ef1`. That release is the source for
 the active Yearn factory `0x200C92Dd85730872Ab6A1e7d5E40A067066257cF`.
-The indexer also follows the compatible Curve factory
+The indexer also follows the compatible LlamaPay v2 factory
 `0xcf61782465Ff973638143d6492B51A85986aB347`; it is an actively used read
 source, not the frontend's current write target.
 
-The local unreleased source ports the Curve fork's escrow registry, zero default
+The local unreleased source ports the LlamaPay v2 fork's escrow registry, zero default
 donation, revoke checks-effects-interactions ordering, and dust-solvency
-assertion. With Vyper 0.3.10 and the Curve constructor values, the resulting
-factory and target runtime hashes exactly reproduce the onchain Curve
+assertion. With Vyper 0.3.10 and the LlamaPay v2 constructor values, the resulting
+factory and target runtime hashes exactly reproduce the onchain LlamaPay v2
 deployments. The consumer-facing escrow ABI and creation event remain
 compatible; the factory adds two registry getters.
 

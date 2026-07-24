@@ -1,188 +1,75 @@
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { readContracts } from '@wagmi/core';
-import { Address } from 'viem';
-import { LiveEscrowData } from '../lib/types';
+import { buildLiveReadPlan } from '../lib/contracts';
+import { IndexedEscrow, LiveEscrowData } from '../lib/types';
 import { config } from '../lib/wagmi';
 
-// Max escrows per batch for multicall
-// readContracts uses Multicall3 contract automatically (1 RPC call per batch)
-// 15 escrows × 10 functions = 150 calls per multicall - balanced for response size limits
+// Keep multicalls comfortably below common public RPC response limits.
 const MAX_ESCROWS_PER_BATCH = 15;
 
-const escrowAbi = [
-  {
-    name: 'unclaimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'locked',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'total_claimed',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'total_locked',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'owner',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    name: 'disabled_at',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'end_time',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'start_time',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'cliff_length',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    name: 'open_claim',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'bool' }],
-  },
-] as const;
-
-const FUNCTIONS_PER_ESCROW = 10;
-
-// Split array into chunks
-function chunk<T>(arr: T[], size: number): T[][] {
+function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
   }
   return chunks;
 }
 
-// Build contracts array for a batch of addresses
-function buildContracts(addresses: string[]) {
-  return addresses.flatMap((escrowAddress) => [
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'unclaimed' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'locked' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'total_claimed' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'total_locked' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'owner' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'disabled_at' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'end_time' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'start_time' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'cliff_length' as const },
-    { address: escrowAddress as Address, abi: escrowAbi, functionName: 'open_claim' as const },
-  ]);
-}
-
-// Parse batch results into LiveEscrowData records
-function parseBatchResults(
-  addresses: string[],
-  data: { status: string; result?: unknown }[]
-): Record<string, LiveEscrowData> {
-  const result: Record<string, LiveEscrowData> = {};
-
-  addresses.forEach((address, escrowIndex) => {
-    const startIdx = escrowIndex * FUNCTIONS_PER_ESCROW;
-    const escrowData = data.slice(startIdx, startIdx + FUNCTIONS_PER_ESCROW);
-
-    if (escrowData.every((d) => d.status === 'success')) {
-      result[address.toLowerCase()] = {
-        unclaimed: escrowData[0].result as bigint,
-        locked: escrowData[1].result as bigint,
-        totalClaimed: escrowData[2].result as bigint,
-        totalLocked: escrowData[3].result as bigint,
-        owner: escrowData[4].result as string,
-        disabledAt: escrowData[5].result as bigint,
-        endTime: escrowData[6].result as bigint,
-        startTime: escrowData[7].result as bigint,
-        cliffLength: escrowData[8].result as bigint,
-        openClaim: escrowData[9].result as boolean,
-      };
-    }
-  });
-
-  return result;
-}
-
-export function useBatchLiveEscrowData(escrowAddresses: string[]) {
-  // Split addresses into batches
+export function useBatchLiveEscrowData(escrows: IndexedEscrow[]) {
   const batches = useMemo(
-    () => chunk(escrowAddresses, MAX_ESCROWS_PER_BATCH),
-    [escrowAddresses]
+    () => chunk(escrows, MAX_ESCROWS_PER_BATCH),
+    [escrows],
   );
 
-  // Fetch each batch in parallel using useQueries
   const queries = useQueries({
-    queries: batches.map((batchAddresses, batchIndex) => ({
-      queryKey: ['batchLiveEscrowData', batchIndex, batchAddresses],
+    queries: batches.map((batch, batchIndex) => ({
+      queryKey: [
+        'batchLiveEscrowData',
+        batchIndex,
+        batch.map((escrow) => [
+          escrow.address,
+          escrow.factory,
+          escrow.version,
+          escrow.kind,
+        ]),
+      ],
       queryFn: async () => {
-        const contracts = buildContracts(batchAddresses);
-        const data = await readContracts(config as any, { contracts });
-        return { addresses: batchAddresses, data };
+        const plans = batch.map(buildLiveReadPlan);
+        const contracts = plans.flatMap((plan) => plan.contracts);
+        const data = await readContracts(config as any, { contracts: contracts as any });
+        return { batch, plans, data };
       },
-      enabled: batchAddresses.length > 0,
-      staleTime: 60_000, // 1 minute
+      enabled: batch.length > 0,
+      staleTime: 60_000,
     })),
   });
 
-  // Combine results from all batches
   const liveDataMap = useMemo(() => {
     const result: Record<string, LiveEscrowData> = {};
 
     for (const query of queries) {
-      if (query.data) {
-        const parsed = parseBatchResults(query.data.addresses, query.data.data);
-        Object.assign(result, parsed);
-      }
+      if (!query.data) continue;
+
+      let offset = 0;
+      query.data.batch.forEach((escrow, index) => {
+        const plan = query.data.plans[index];
+        const planResults = query.data.data.slice(offset, offset + plan.contracts.length);
+        offset += plan.contracts.length;
+        const parsed = plan.parse(planResults);
+        if (parsed) {
+          result[escrow.address.toLowerCase()] = parsed;
+        }
+      });
     }
 
     return result;
   }, [queries]);
 
-  const isLoading = queries.some((q) => q.isLoading);
-  const isFetching = queries.some((q) => q.isFetching);
-  const error = queries.find((q) => q.error)?.error;
-
   return {
     data: liveDataMap,
-    isLoading,
-    isFetching,
-    error,
+    isLoading: queries.some((query) => query.isLoading),
+    isFetching: queries.some((query) => query.isFetching),
+    error: queries.find((query) => query.error)?.error,
   };
 }

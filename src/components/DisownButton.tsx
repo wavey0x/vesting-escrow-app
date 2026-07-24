@@ -3,24 +3,17 @@ import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { Address } from 'viem';
 import Button from './Button';
 import { getEtherscanTxUrl } from '../lib/constants';
-
-const escrowAbi = [
-  {
-    name: 'disown',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [],
-    outputs: [],
-  },
-] as const;
+import { legacyDisownAbi, v04RenounceAbi } from '../lib/contracts';
 
 interface DisownButtonProps {
   escrowAddress: string;
+  isV04: boolean;
   onSuccess?: () => void;
 }
 
 export default function DisownButton({
   escrowAddress,
+  isV04,
   onSuccess,
 }: DisownButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
@@ -31,11 +24,19 @@ export default function DisownButton({
   });
 
   const handleDisown = () => {
-    writeContract({
-      address: escrowAddress as Address,
-      abi: escrowAbi,
-      functionName: 'disown',
-    });
+    if (isV04) {
+      writeContract({
+        address: escrowAddress as Address,
+        abi: v04RenounceAbi,
+        functionName: 'renounce_revocation',
+      });
+    } else {
+      writeContract({
+        address: escrowAddress as Address,
+        abi: legacyDisownAbi,
+        functionName: 'disown',
+      });
+    }
     setShowConfirm(false);
   };
 
@@ -64,7 +65,7 @@ export default function DisownButton({
     return (
       <div className="flex flex-col gap-2">
         <p className="text-sm text-secondary">
-          This will permanently give up ownership of this escrow. You will no
+          This will permanently give up revocation authority over this escrow. You will no
           longer be able to revoke tokens. This action cannot be undone.
         </p>
         <div className="flex gap-2">
@@ -76,8 +77,8 @@ export default function DisownButton({
             {isPending
               ? 'Confirm in wallet...'
               : isConfirming
-              ? 'Disowning...'
-              : 'Confirm Disown'}
+              ? 'Renouncing...'
+              : `Confirm ${isV04 ? 'Renounce' : 'Disown'}`}
           </Button>
           <Button variant="ghost" onClick={() => setShowConfirm(false)}>
             Cancel
@@ -90,7 +91,7 @@ export default function DisownButton({
   return (
     <div>
       <Button variant="secondary" onClick={() => setShowConfirm(true)}>
-        Disown
+        {isV04 ? 'Renounce Revocation' : 'Disown'}
       </Button>
       {error && (
         <p className="mt-2 text-sm text-red-600 dark:text-red-400">

@@ -34,7 +34,7 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
   const { getName, setName } = useEscrowNames();
 
   // Only fetch if liveData not provided (backward compatibility for detail page)
-  const { data: fetchedLiveData } = useLiveEscrowData(providedLiveData ? undefined : escrow.address);
+  const { data: fetchedLiveData } = useLiveEscrowData(providedLiveData ? undefined : escrow);
   const liveData = providedLiveData ?? fetchedLiveData;
   // Use || not ?? - we're loading if batch is loading OR if we don't have data for this escrow
   const isLoading = isLoadingLiveData || !liveData;
@@ -88,6 +88,9 @@ export default function EscrowCard({ escrow, tokenMetadata, liveData: providedLi
 
       {/* Name row */}
       <div className="flex items-center gap-2 mb-2 pr-24">
+        {escrow.kind === 'erc4626' && (
+          <span className="text-xs text-tertiary">ERC-4626</span>
+        )}
         {isEditing ? (
           <input
             type="text"

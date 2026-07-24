@@ -1,0 +1,49 @@
+name: App
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'config/**'
+      - 'scripts/indexer/**'
+      - 'src/**'
+      - 'eslint.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    paths:
+      - 'config/**'
+      - 'scripts/indexer/**'
+      - 'src/**'
+      - 'eslint.config.js'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  indexer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/indexer/requirements.txt
+      - run: pip install -r scripts/indexer/requirements.txt
+      - run: python -m unittest scripts.indexer.test_index_escrows

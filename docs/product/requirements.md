@@ -1,6 +1,7 @@
 # Product Requirements
 
-This app lets users inspect, track, and create Yearn/Curve vesting escrows on Ethereum mainnet.
+This app lets users inspect, track, and create Yearn and LlamaPay vesting
+escrows on Ethereum mainnet.
 
 ## Routes
 
@@ -47,29 +48,33 @@ This app lets users inspect, track, and create Yearn/Curve vesting escrows on Et
 | Action | Condition |
 | --- | --- |
 | `Claim` | User is recipient or `open_claim` is enabled and claimable amount is non-zero |
-| `Revoke` | User is current owner, escrow has locked tokens, and vesting has not ended |
-| `Disown` | User is current owner and owner is not the zero address |
+| `Revoke` | User is the current owner/revoker, escrow has locked principal, and vesting has not ended |
+| `Disown` / `Renounce Revocation` | User has the current legacy owner or v0.4 revoker authority |
+| `Claim Yield` | A v0.4 ERC-4626 escrow has claimable yield shares |
 
 ## Create Flow
 
 ### Inputs
 
-- Token address
+- Escrow type: standard ERC-20 or ERC-4626
+- Token or vault address
 - Recipient address
-- Amount
+- Token amount or asset-denominated ERC-4626 principal
+- ERC-4626 yield recipient
 - Vesting duration
 - Optional cliff
 - Start now or explicit start date
 - `open claim` toggle
-- `support Vyper` toggle
 
 ### Behavior
 
 - Wallet connection is required.
-- The page reads token symbol, decimals, balance, and allowance.
-- ERC20 approval happens before deployment when allowance is insufficient.
-- The owner is the connected wallet; there is no separate owner input in the current UI.
-- The app parses the `VestingEscrowCreated` event from the receipt and routes to the new escrow.
+- The page reads token/vault metadata, balance, and allowance.
+- ERC-4626 funding uses the factory's rounded-up share quote for the requested
+  asset-denominated principal.
+- ERC20 or vault-share approval happens before deployment when allowance is insufficient.
+- The revoker is the connected wallet; there is no separate revoker input in the current UI.
+- The app decodes the versioned creation event from the receipt and routes to the new escrow.
 
 ## Data Model
 
@@ -86,12 +91,13 @@ The detail and list views read live escrow state on demand:
 - `locked()`
 - `total_claimed`
 - `total_locked`
-- `owner`
+- `owner` or `revoker`
 - `disabled_at`
 - `end_time`
 - `start_time`
 - `cliff_length`
-- `open_claim`
+- `open_claim` or `permissionless_claims`
+- ERC-4626 principal, yield-share, vault, and yield-recipient state
 
 ### External Data
 

@@ -205,24 +205,24 @@ export default function Manage() {
   }, [urlQuery, escrowsIndex, searchResults]);
 
   // Collect all escrow addresses that need live data based on active tab
-  const escrowAddressesToFetch = useMemo(() => {
-    const addresses: string[] = [];
+  const escrowsToFetch = useMemo(() => {
+    const escrows: IndexedEscrow[] = [];
 
     if (activeTab === 'my-escrows' && myEscrows) {
-      addresses.push(...sortAndFilterEscrows(myEscrows).map(e => e.address));
+      escrows.push(...sortAndFilterEscrows(myEscrows));
     } else if (activeTab === 'starred') {
-      addresses.push(...sortAndFilterEscrows(starredEscrows).map(e => e.address));
+      escrows.push(...sortAndFilterEscrows(starredEscrows));
     } else if (activeTab === 'search' && searchResults) {
-      addresses.push(...sortAndFilterEscrows(searchResults).map(e => e.address));
+      escrows.push(...sortAndFilterEscrows(searchResults));
     } else if (activeTab === 'all') {
-      addresses.push(...sortEscrows(allEscrows).map(e => e.address));
+      escrows.push(...sortEscrows(allEscrows));
     }
 
-    return addresses;
+    return escrows;
   }, [activeTab, myEscrows, starredEscrows, searchResults, allEscrows, sortAndFilterEscrows, sortEscrows]);
 
   // Batch fetch live data for all visible escrows
-  const { data: liveDataMap, isLoading: loadingLiveData } = useBatchLiveEscrowData(escrowAddressesToFetch);
+  const { data: liveDataMap, isLoading: loadingLiveData } = useBatchLiveEscrowData(escrowsToFetch);
 
   const filterByStatus = useCallback((escrows: IndexedEscrow[]) => {
     if (selectedStatuses.size === ALL_STATUSES.length) return escrows;

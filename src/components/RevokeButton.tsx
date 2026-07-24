@@ -4,25 +4,15 @@ import { Address, zeroAddress } from 'viem';
 import Button from './Button';
 import { formatTokenAmount } from '../lib/format';
 import { getEtherscanTxUrl } from '../lib/constants';
-
-const escrowAbi = [
-  {
-    name: 'revoke',
-    type: 'function',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'beneficiary', type: 'address' },
-      { name: 'ts', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-] as const;
+import { legacyRevokeAbi, v04RevokeAbi } from '../lib/contracts';
 
 interface RevokeButtonProps {
   escrowAddress: string;
   locked: bigint;
   decimals: number;
   symbol?: string;
+  isV04: boolean;
+  receiver: string;
   onSuccess?: () => void;
 }
 
@@ -31,6 +21,8 @@ export default function RevokeButton({
   locked,
   decimals,
   symbol,
+  isV04,
+  receiver,
   onSuccess,
 }: RevokeButtonProps) {
   const [showConfirm, setShowConfirm] = useState(false);
@@ -41,13 +33,22 @@ export default function RevokeButton({
   });
 
   const handleRevoke = () => {
-    // Revoke immediately (ts = 0) and send to self (beneficiary = zero to use msg.sender)
-    writeContract({
-      address: escrowAddress as Address,
-      abi: escrowAbi,
-      functionName: 'revoke',
-      args: [zeroAddress, 0n],
-    });
+    if (isV04) {
+      writeContract({
+        address: escrowAddress as Address,
+        abi: v04RevokeAbi,
+        functionName: 'revoke',
+        args: [receiver as Address],
+      });
+    } else {
+      // Legacy escrows use zero values for immediate revocation to msg.sender.
+      writeContract({
+        address: escrowAddress as Address,
+        abi: legacyRevokeAbi,
+        functionName: 'revoke',
+        args: [zeroAddress, 0n],
+      });
+    }
     setShowConfirm(false);
   };
 

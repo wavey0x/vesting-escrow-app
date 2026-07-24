@@ -1,10 +1,16 @@
 import { getAddress } from 'viem';
+import deploymentConfig from '../../config/deployments.json';
 
 // Chain configuration
-export const CHAIN_ID = 1;
+export const CHAIN_ID = deploymentConfig.chainId;
 
 // Contract addresses
-export const FACTORY_ADDRESS = '0x200C92Dd85730872Ab6A1e7d5E40A067066257cF' as const;
+export const FACTORY_ADDRESS = getAddress(deploymentConfig.activeFactory);
+export const V04_FACTORY_ADDRESS = FACTORY_ADDRESS;
+export const FACTORIES = deploymentConfig.factories.map((factory) => ({
+  ...factory,
+  address: getAddress(factory.address),
+}));
 
 // Data endpoints
 export const ESCROWS_DATA_URL = '/data/escrows.json';
