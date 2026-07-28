@@ -1,5 +1,5 @@
 {
-  "lastIndexed": "2026-07-27T02:11:42.459823+00:00",
+  "lastIndexed": "2026-07-28T10:32:51.417685+00:00",
   "chainId": 1,
   "escrows": [
     {
@@ -12673,28 +12673,48 @@
       "openClaim": false,
       "blockNumber": 23045695,
       "txHash": "a3bc444b674a7486fd341657160614abc877a9636af9e77669f73d36927681e2"
+    },
+    {
+      "address": "0xF3E1022996BfF7a8a1d6f17F7Db5D64568BE8D53",
+      "factory": "0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215",
+      "version": "v0.4.0",
+      "kind": "erc4626",
+      "funder": "0x13B053f017B6C68e089267Ffc3f10EE92ED95a79",
+      "token": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "vault": "0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204",
+      "recipient": "0x94112434c4C3EA14a4328A5D9383a00e78d772eb",
+      "revoker": "0x13B053f017B6C68e089267Ffc3f10EE92ED95a79",
+      "yieldRecipient": "0x94112434c4C3EA14a4328A5D9383a00e78d772eb",
+      "fundedShares": "898459",
+      "amount": "1000000",
+      "vestingStart": 1785232797,
+      "vestingDuration": 648000,
+      "cliffLength": 0,
+      "openClaim": false,
+      "blockNumber": 25630580,
+      "txHash": "38c0e07bfa4a37ea0387e073deb027ead24b12b3dd7a15700b8c1ea286a497d0"
     }
   ],
   "factories": {
     "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF": {
       "deployBlock": 18291969,
-      "lastBlock": 25621075
+      "lastBlock": 25630742
     },
     "0xcf61782465Ff973638143d6492B51A85986aB347": {
       "deployBlock": 19739664,
-      "lastBlock": 25621075
+      "lastBlock": 25630742
     },
     "0xF124534bfa6Ac7b89483B401B4115Ec0d27cad6A": {
       "deployBlock": 11868366,
-      "lastBlock": 25621075
+      "lastBlock": 25630742
     },
     "0x98d3872b4025ABE58C4667216047Fe549378d90f": {
       "deployBlock": 13373452,
-      "lastBlock": 25621075
+      "lastBlock": 25630742
     },
     "0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215": {
       "deployBlock": 25602335,
-      "lastBlock": 25621075
+      "lastBlock": 25630742
     }
   }
 }
