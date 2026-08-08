@@ -1,5 +1,5 @@
 {
-  "lastIndexed": "2026-07-30T15:51:16.416945+00:00",
+  "lastIndexed": "2026-08-08T12:42:59.880650+00:00",
   "chainId": 1,
   "escrows": [
     {
@@ -12710,28 +12710,44 @@
       "openClaim": false,
       "blockNumber": 25646153,
       "txHash": "c72532ee0f4a124e9f9f338c6e06f519857a25b996ad4d07cbc5244aaf45b312"
+    },
+    {
+      "address": "0xfDD19415572A82eAfC8b59b6Be7C2aA1F4306FEF",
+      "factory": "0xcf61782465Ff973638143d6492B51A85986aB347",
+      "version": "llamapay-v2",
+      "kind": "token",
+      "funder": "0x3B985f06D624C74F270daeCcDb65DcC6ee582372",
+      "token": "0x73968b9a57c6e53d41345fd57a6e6ae27d6cdb2f",
+      "recipient": "0x860b7Abd16672B33Bab84679526227adb283ed8f",
+      "amount": "1000000000000000000",
+      "vestingStart": 1785794400,
+      "vestingDuration": 63072000,
+      "cliffLength": 0,
+      "openClaim": true,
+      "blockNumber": 25709997,
+      "txHash": "ee6880e3abff5b143490fa98419103be1f35200c1c1aca128da3a51735909107"
     }
   ],
   "factories": {
     "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF": {
       "deployBlock": 18291969,
-      "lastBlock": 25646684
+      "lastBlock": 25710313
     },
     "0xcf61782465Ff973638143d6492B51A85986aB347": {
       "deployBlock": 19739664,
-      "lastBlock": 25646684
+      "lastBlock": 25710313
     },
     "0xF124534bfa6Ac7b89483B401B4115Ec0d27cad6A": {
       "deployBlock": 11868366,
-      "lastBlock": 25646684
+      "lastBlock": 25710313
     },
     "0x98d3872b4025ABE58C4667216047Fe549378d90f": {
       "deployBlock": 13373452,
-      "lastBlock": 25646684
+      "lastBlock": 25710313
     },
     "0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215": {
       "deployBlock": 25602335,
-      "lastBlock": 25646684
+      "lastBlock": 25710313
     }
   }
 }
