@@ -1,10 +1,11 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAccount } from 'wagmi';
-import { isAddress } from 'viem';
+import { useAccount, useEnsAddress } from 'wagmi';
+import { mainnet } from 'wagmi/chains';
 import Button from '../components/Button';
 import Spinner from '../components/Spinner';
 import EscrowCard from '../components/EscrowCard';
+import Address from '../components/Address';
 import { useEscrows, useEscrowsByAddress } from '../hooks/useEscrows';
 import { useStarredEscrows } from '../contexts/StarredEscrowsContext';
 import { useBatchLiveEscrowData } from '../hooks/useBatchLiveEscrowData';
@@ -12,6 +13,11 @@ import { useTokens } from '../hooks/useTokens';
 import { IndexedEscrow, EscrowStatus } from '../lib/types';
 import StatusFilter, { ALL_STATUSES } from '../components/StatusFilter';
 import { getEscrowStatus, mergeEscrowData } from '../lib/escrow';
+import {
+  findEscrowByAddress,
+  findEscrowsBySearchAddress,
+  parseSearchQuery,
+} from '../lib/search';
 
 type Tab = 'my-escrows' | 'starred' | 'search' | 'all';
 
@@ -118,6 +124,31 @@ export default function Manage() {
   const { data: escrowsIndex, isLoading: loadingIndex } = useEscrows();
   const { data: tokensIndex } = useTokens();
 
+  // Resolve only the submitted, URL-backed query so typing does not issue RPC calls.
+  const urlQuery = searchParams.get('q')?.trim() || '';
+  const parsedUrlQuery = useMemo(() => parseSearchQuery(urlQuery), [urlQuery]);
+  const ensName = parsedUrlQuery.kind === 'ens' ? parsedUrlQuery.name : undefined;
+  const {
+    data: resolvedEnsAddress,
+    isLoading: resolvingEns,
+    isError: ensResolutionFailed,
+    isFetched: ensResolutionFinished,
+  } = useEnsAddress({
+    name: ensName,
+    chainId: mainnet.id,
+    query: { enabled: Boolean(ensName) },
+  });
+  const searchAddress = parsedUrlQuery.kind === 'address'
+    ? parsedUrlQuery.address
+    : resolvedEnsAddress || undefined;
+  const searchIsDirty = searchQuery.trim() !== urlQuery;
+
+  // Keep the input synchronized with browser back/forward navigation.
+  useEffect(() => {
+    setSearchQuery(urlQuery);
+    setSearchError('');
+  }, [urlQuery]);
+
   // Track if we've set the initial tab (only do it once)
   const hasSetInitialTab = useRef(false);
 
@@ -159,50 +190,56 @@ export default function Manage() {
     return escrowsIndex?.escrows || [];
   }, [escrowsIndex]);
 
-  // Derive search results from URL query - this survives back navigation
-  const urlQuery = searchParams.get('q')?.trim() || '';
+  // Derive search results from the direct or ENS-resolved address.
   const searchResults = useMemo(() => {
-    if (!urlQuery || !escrowsIndex?.escrows) return null;
-    if (!isAddress(urlQuery)) return null;
-
-    const lowerQuery = urlQuery.toLowerCase();
-    const matchingEscrows = escrowsIndex.escrows
-      .filter((e) => (
-        e.recipient.toLowerCase() === lowerQuery ||
-        (includeFunders && e.funder.toLowerCase() === lowerQuery)
-      ))
-      .sort((a, b) => b.blockNumber - a.blockNumber);
-
-    return matchingEscrows.length > 0 ? matchingEscrows : null;
-  }, [urlQuery, escrowsIndex, includeFunders]);
-
-  // If URL query matches an exact escrow address, navigate to it
-  useEffect(() => {
-    if (!urlQuery || !escrowsIndex?.escrows) return;
-    if (!isAddress(urlQuery)) return;
-
-    const escrow = escrowsIndex.escrows.find(
-      (e) => e.address.toLowerCase() === urlQuery.toLowerCase()
+    if (!searchAddress || !escrowsIndex?.escrows) return null;
+    const matchingEscrows = findEscrowsBySearchAddress(
+      escrowsIndex.escrows,
+      searchAddress,
+      includeFunders,
     );
 
+    return matchingEscrows.length > 0 ? matchingEscrows : null;
+  }, [searchAddress, escrowsIndex, includeFunders]);
+
+  // If the direct or ENS-resolved query matches an escrow, navigate to it.
+  useEffect(() => {
+    if (!searchAddress || !escrowsIndex?.escrows) return;
+    const escrow = findEscrowByAddress(escrowsIndex.escrows, searchAddress);
+
     if (escrow) {
-      navigate(`/vest/${urlQuery}`, { replace: true, state: { fromApp: true } });
+      navigate(`/vest/${escrow.address}`, { replace: true, state: { fromApp: true } });
     }
-  }, [urlQuery, escrowsIndex, navigate]);
+  }, [searchAddress, escrowsIndex, navigate]);
 
   // Derive search error from URL query
   const derivedSearchError = useMemo(() => {
     if (!urlQuery) return '';
-    if (!isAddress(urlQuery)) return 'Invalid Ethereum address';
+    if (parsedUrlQuery.kind === 'invalid') return 'Invalid address or ENS name';
+    if (parsedUrlQuery.kind === 'ens') {
+      if (resolvingEns) return '';
+      if (ensResolutionFailed) return 'Could not resolve ENS name. Try again.';
+      if (ensResolutionFinished && !resolvedEnsAddress) {
+        return 'ENS name does not resolve to an Ethereum address';
+      }
+    }
     if (escrowsIndex?.escrows && !searchResults) {
-      // Check if it's not an escrow address either
-      const isEscrowAddress = escrowsIndex.escrows.some(
-        (e) => e.address.toLowerCase() === urlQuery.toLowerCase()
-      );
+      if (!searchAddress) return '';
+      const isEscrowAddress = Boolean(findEscrowByAddress(escrowsIndex.escrows, searchAddress));
       if (!isEscrowAddress) return 'No escrows found for this address';
     }
     return '';
-  }, [urlQuery, escrowsIndex, searchResults]);
+  }, [
+    urlQuery,
+    parsedUrlQuery,
+    resolvingEns,
+    ensResolutionFailed,
+    ensResolutionFinished,
+    resolvedEnsAddress,
+    escrowsIndex,
+    searchResults,
+    searchAddress,
+  ]);
 
   // Collect all escrow addresses that need live data based on active tab
   const escrowsToFetch = useMemo(() => {
@@ -247,15 +284,21 @@ export default function Manage() {
       return;
     }
 
-    if (!isAddress(trimmedQuery)) {
-      setSearchError('Invalid Ethereum address');
+    const parsedQuery = parseSearchQuery(trimmedQuery);
+    if (parsedQuery.kind === 'invalid') {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set('q', trimmedQuery);
+      setSearchParams(newParams);
+      setSearchError('Invalid address or ENS name');
       return;
     }
 
     // Update URL while preserving search options
+    const canonicalQuery = parsedQuery.kind === 'ens' ? parsedQuery.name : trimmedQuery;
     const newParams = new URLSearchParams(searchParams);
-    newParams.set('q', trimmedQuery);
+    newParams.set('q', canonicalQuery);
     setSearchParams(newParams);
+    setSearchQuery(canonicalQuery);
   };
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
@@ -450,11 +493,14 @@ export default function Manage() {
                 id="search"
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Enter escrow or recipient address"
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSearchError('');
+                }}
+                placeholder="Enter an address or ENS name"
                 className="flex-1 px-3 py-2 text-sm border border-divider-strong rounded bg-background focus:outline-none focus:border-primary"
               />
-              <Button type="submit">Search</Button>
+              <Button type="submit" loading={resolvingEns && !searchIsDirty}>Search</Button>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-4">
@@ -493,9 +539,21 @@ export default function Manage() {
                   </button>
                 </label>
               </div>
-              <div>
-                {(searchError || derivedSearchError) && (
-                  <p className="text-sm text-red-600 dark:text-red-400">{searchError || derivedSearchError}</p>
+              <div aria-live="polite">
+                {!searchIsDirty && resolvingEns && (
+                  <p className="text-sm text-secondary">Resolving {ensName}…</p>
+                )}
+                {!searchIsDirty && resolvedEnsAddress && parsedUrlQuery.kind === 'ens' && (
+                  <p className="flex items-center gap-1.5 text-sm text-secondary">
+                    <span>{parsedUrlQuery.name}</span>
+                    <span aria-hidden="true">→</span>
+                    <Address address={resolvedEnsAddress} showCopy={false} showLink={false} />
+                  </p>
+                )}
+                {(searchError || (!searchIsDirty && derivedSearchError)) && (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    {searchError || derivedSearchError}
+                  </p>
                 )}
               </div>
             </div>

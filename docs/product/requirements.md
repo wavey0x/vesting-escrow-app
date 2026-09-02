@@ -17,7 +17,7 @@ escrows on Ethereum mainnet.
 
 | Tab | Notes |
 | --- | --- |
-| `Search` | Search by escrow address or recipient address, with optional funder matching |
+| `Search` | Search by escrow address, recipient address, or ENS name, with optional funder matching |
 | `Starred` | Escrows saved locally by the user |
 | `My Escrows` | Escrows tied to the connected wallet |
 | `All` | Admin-only tab enabled with `localStorage.admin = 'true'` |
@@ -25,6 +25,8 @@ escrows on Ethereum mainnet.
 ### Behavior
 
 - If the URL contains `?q=...`, the page opens on `Search`.
+- ENS names are normalized and resolved on Ethereum mainnet before matching.
+- Submitted ENS names remain in `?q=...` so searches can be shared and restored through browser navigation.
 - Without a query, the initial tab prefers `Starred`, then `My Escrows`, then `Search`.
 - Exact escrow address queries redirect to `/vest/:address`.
 - Recipient address queries render a result list on the page.
