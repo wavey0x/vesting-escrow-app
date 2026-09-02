@@ -1,5 +1,5 @@
 {
-  "lastIndexed": "2026-09-02T10:39:02.919173+00:00",
+  "lastIndexed": "2026-09-02T16:42:17.456618+00:00",
   "chainId": 1,
   "escrows": [
     {
@@ -12806,28 +12806,65 @@
       "openClaim": true,
       "blockNumber": 25887786,
       "txHash": "ada0a364b5dd1a8583d8fd12f2c16947c9da566a7f6452f3822b964ca57fb01d"
+    },
+    {
+      "address": "0x1ECd05c16CF2673eb583EaA3e4d3D9D7678f6b7E",
+      "factory": "0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215",
+      "version": "v0.4.0",
+      "kind": "erc4626",
+      "funder": "0x6508eF65b0Bd57eaBD0f1D52685A70433B2d290B",
+      "token": "0xcacd6fd266af91b8aed52accc382b4e165586e29",
+      "vault": "0xcf62F905562626CfcDD2261162a51fd02Fc9c5b6",
+      "recipient": "0xc0DE00005F21Fa7846BA0EA2E3F2FC4F048a72C9",
+      "revoker": "0x40907540d8a6C65c637785e8f8B742ae6b0b9968",
+      "yieldRecipient": "0x6508eF65b0Bd57eaBD0f1D52685A70433B2d290B",
+      "fundedShares": "103417951469279782588859",
+      "amount": "125000000000000000000000",
+      "vestingStart": 1788220800,
+      "vestingDuration": 31536000,
+      "cliffLength": 0,
+      "openClaim": true,
+      "blockNumber": 25890821,
+      "txHash": "bb4696970864038179030afa07060c17a73e3bbd94ed3827a02adbafec84ee4f"
+    },
+    {
+      "address": "0xf74123f20FFAC4987CCd28f570c9e5aD0526cA13",
+      "factory": "0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215",
+      "version": "v0.4.0",
+      "kind": "token",
+      "funder": "0x6508eF65b0Bd57eaBD0f1D52685A70433B2d290B",
+      "token": "0xd533a949740bb3306d119cc777fa900ba034cd52",
+      "recipient": "0xc0DE00005F21Fa7846BA0EA2E3F2FC4F048a72C9",
+      "revoker": "0x40907540d8a6C65c637785e8f8B742ae6b0b9968",
+      "amount": "568181000000000000000000",
+      "vestingStart": 1788220800,
+      "vestingDuration": 31536000,
+      "cliffLength": 0,
+      "openClaim": true,
+      "blockNumber": 25890821,
+      "txHash": "bb4696970864038179030afa07060c17a73e3bbd94ed3827a02adbafec84ee4f"
     }
   ],
   "factories": {
     "0x200C92Dd85730872Ab6A1e7d5E40A067066257cF": {
       "deployBlock": 18291969,
-      "lastBlock": 25889063
+      "lastBlock": 25890872
     },
     "0xcf61782465Ff973638143d6492B51A85986aB347": {
       "deployBlock": 19739664,
-      "lastBlock": 25889063
+      "lastBlock": 25890872
     },
     "0xF124534bfa6Ac7b89483B401B4115Ec0d27cad6A": {
       "deployBlock": 11868366,
-      "lastBlock": 25889063
+      "lastBlock": 25890872
     },
     "0x98d3872b4025ABE58C4667216047Fe549378d90f": {
       "deployBlock": 13373452,
-      "lastBlock": 25889063
+      "lastBlock": 25890872
     },
     "0xFbd94e2D6942D5b4Ed0C5C9C43bded77a8f20215": {
       "deployBlock": 25602335,
-      "lastBlock": 25889063
+      "lastBlock": 25890872
     }
   }
 }
